@@ -27,7 +27,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -48,62 +47,29 @@ import org.eu.nl.syu.way2fly.util.BCBPParser
 
 @Composable
 fun AuthScreen(
-    onPassengerAuthenticated: (BoardingPassData) -> Unit,
-    onStaffAuthenticated: () -> Unit
+    onPassengerAuthenticated: (BoardingPassData) -> Unit
 ) {
-    var selectedTabIndex by remember { mutableIntStateOf(0) } 
     val scrollState = rememberScrollState()
 
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        BrandedHeader(
-            title = "Way2Fly",
-            subtitle = if (selectedTabIndex == 0) "Passenger Portal" else "Staff Management",
-            isCompact = false // Login screen remains large
-        ) {
-            Surface(
-                modifier = Modifier.size(50.dp),
-                shape = RoundedCornerShape(12.dp),
-                color = Color.White.copy(alpha = 0.2f)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.AirplanemodeActive,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(30.dp)
-                    )
-                }
-            }
-        }
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(scrollState)
-                .padding(top = 160.dp) // Adjusted for large header
-                .padding(24.dp),
+                .padding(horizontal = 24.dp, vertical = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            RoleSelector(
-                selectedRole = selectedTabIndex,
-                onRoleSelected = { selectedTabIndex = it }
+            Spacer(modifier = Modifier.height(48.dp))
+
+            GlobalHeroHeader(
+                title = "Way2Fly",
+                subtitle = "Passenger Portal",
+                isCompact = false
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
-            AnimatedContent(
-                targetState = selectedTabIndex,
-                transitionSpec = {
-                    fadeIn(animationSpec = tween(300)) togetherWith fadeOut(animationSpec = tween(300))
-                },
-                label = "auth_card"
-            ) { targetIndex ->
-                if (targetIndex == 0) {
-                    PassengerAuthCard(onPassengerAuthenticated)
-                } else {
-                    StaffAuthCard(onStaffAuthenticated)
-                }
-            }
+            PassengerAuthCard(onPassengerAuthenticated)
             
             Spacer(modifier = Modifier.height(32.dp))
             Text(
@@ -112,58 +78,6 @@ fun AuthScreen(
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                 textAlign = TextAlign.Center
             )
-        }
-    }
-}
-
-@Composable
-private fun RoleSelector(
-    selectedRole: Int,
-    onRoleSelected: (Int) -> Unit
-) {
-    val roles = listOf(
-        "Passenger" to Icons.Default.Person,
-        "Staff" to Icons.Default.Badge
-    )
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp)
-            .clip(RoundedCornerShape(28.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-            .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        roles.forEachIndexed { index, (label, icon) ->
-            val selected = selectedRole == index
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
-                    .clickable { onRoleSelected(index) },
-                contentAlignment = Alignment.Center
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Text(
-                        text = label.uppercase(),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
         }
     }
 }
@@ -183,7 +97,7 @@ fun PassengerAuthCard(onAuthenticated: (BoardingPassData) -> Unit) {
             if (scannedData == null) {
                 Text("Scan Boarding Pass", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 16.dp))
                 
-                Box(modifier = Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(20.dp)).background(Color.Black)) {
+                Box(modifier = Modifier.fillMaxWidth().height(250.dp).clip(RoundedCornerShape(16.dp)).background(Color.Black)) {
                     if (LocalInspectionMode.current) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Icon(Icons.Default.CameraAlt, contentDescription = null, tint = Color.White, modifier = Modifier.size(48.dp))
@@ -236,7 +150,7 @@ fun PassengerAuthCard(onAuthenticated: (BoardingPassData) -> Unit) {
                 onClick = { scannedData?.let { onAuthenticated(it.copy(phoneNumber = phoneNumber)) } },
                 enabled = scannedData != null && isPhoneValid,
                 modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary, contentColor = Color.White)
             ) {
                 Text("ENTER APP", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -249,67 +163,6 @@ fun PassengerAuthCard(onAuthenticated: (BoardingPassData) -> Unit) {
                     style = MaterialTheme.typography.labelSmall,
                     modifier = Modifier.padding(top = 4.dp)
                 )
-            }
-        }
-    }
-}
-
-@Composable
-fun StaffAuthCard(onAuthenticated: () -> Unit) {
-    var username by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var error by remember { mutableStateOf<String?>(null) }
-
-    ElevatedCard(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
-        Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Staff Credentials", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 24.dp))
-            
-            OutlinedTextField(
-                value = username,
-                onValueChange = { username = it },
-                label = { Text("Username") },
-                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                singleLine = true
-            )
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
-                label = { Text("Password") },
-                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                singleLine = true,
-                visualTransformation = PasswordVisualTransformation()
-            )
-            
-            if (error != null) {
-                Text(error!!, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            Button(
-                onClick = {
-                    if (username == "admin" && password == "admin") {
-                        onAuthenticated()
-                    } else {
-                        error = "Invalid admin credentials"
-                    }
-                },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-            ) {
-                Text("STAFF LOGIN", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -400,5 +253,5 @@ fun CameraPreview(onBarcodeScanned: (String) -> Unit) {
 @ComposePreview(showBackground = true)
 @Composable
 fun AuthScreenPreview() {
-    Way2FlyTheme { AuthScreen(onPassengerAuthenticated = {}, onStaffAuthenticated = {}) }
+    Way2FlyTheme { AuthScreen(onPassengerAuthenticated = {}) }
 }

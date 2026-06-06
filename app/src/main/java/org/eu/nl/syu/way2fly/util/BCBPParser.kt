@@ -1,6 +1,7 @@
 package org.eu.nl.syu.way2fly.util
 
 import org.eu.nl.syu.way2fly.model.BoardingPassData
+import org.eu.nl.syu.way2fly.model.defaultSteps
 
 object BCBPParser {
     /**
@@ -29,7 +30,11 @@ object BCBPParser {
                 carrier = carrier,
                 flightNumber = flightNumber,
                 date = julianDate,
-                seat = seat
+                seat = seat,
+                phoneNumber = null,
+                notifications = emptyList(),
+                guidanceSteps = defaultSteps(),
+                activeGroups = emptyList()
             )
         } catch (e: Exception) {
             return null

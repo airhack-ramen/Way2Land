@@ -9,61 +9,65 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun BrandedHeader(
+fun GlobalHeroHeader(
     title: String,
     subtitle: String? = null,
-    isCompact: Boolean = true, // Default to compact for most screens
+    isCompact: Boolean = false,
     actions: @Composable RowScope.() -> Unit = {}
 ) {
-    val headerHeight = if (isCompact) 100.dp else 180.dp
-    val verticalPadding = if (isCompact) 16.dp else 32.dp
-
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .height(headerHeight)
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.primary,
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
-                    )
-                )
-            )
+            .padding(horizontal = 24.dp, vertical = if (isCompact) 16.dp else 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 24.dp, vertical = verticalPadding),
-            horizontalAlignment = Alignment.Start,
-            verticalArrangement = Arrangement.Bottom
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+        if (!isCompact) {
+            Box(
+                modifier = Modifier.size(80.dp),
+                contentAlignment = Alignment.Center
             ) {
-                Column {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = Color.White,
-                        fontWeight = FontWeight.Black
+                Surface(
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    tonalElevation = 0.dp
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AirplanemodeActive,
+                        contentDescription = null,
+                        modifier = Modifier.size(44.dp),
+                        tint = MaterialTheme.colorScheme.primary
                     )
-                    if (subtitle != null) {
-                        Text(
-                            text = subtitle,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White.copy(alpha = 0.7f)
-                        )
-                    }
                 }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(horizontalAlignment = if (isCompact) Alignment.Start else Alignment.CenterHorizontally, modifier = if (isCompact) Modifier else Modifier.fillMaxWidth()) {
+                Text(
+                    text = title,
+                    style = if (isCompact) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                if (subtitle != null) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            if (isCompact) {
                 Row(content = actions)
             }
         }

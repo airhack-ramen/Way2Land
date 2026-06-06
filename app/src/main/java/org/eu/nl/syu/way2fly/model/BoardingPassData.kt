@@ -7,24 +7,34 @@ data class BoardingPassData(
     val to: String,
     val carrier: String,
     val flightNumber: String,
-    val date: String, // Julian date (day of year)
+    val date: String,
     val seat: String,
-    val phoneNumber: String? = null,
-    val notifications: List<InboxMessage> = emptyList(),
-    val guidanceSteps: List<GuidanceStep> = defaultSteps(),
-    val threatScore: Int = (0..100).random()
+    val phoneNumber: String?,
+    val notifications: List<InboxMessage>,
+    val guidanceSteps: List<GuidanceStep>,
+    val activeGroups: List<FriendGroup>,
+    val threatScore: Int = 0
 )
 
 fun defaultSteps() = listOf(
-    GuidanceStep("Check-in", "Head to the check-in counters (Blue zone) to drop off luggage."),
-    GuidanceStep("Security Control", "Prepare your liquids and electronics for screening (Orange zone)."),
-    GuidanceStep("Duty Free", "Enjoy some shopping before your flight (Green zone).", isMandatory = false),
-    GuidanceStep("Boarding", "Proceed to your designated gate B1-B10 for boarding.")
+    GuidanceStep("Security Check", "Complete the main security screening", isCompleted = false),
+    GuidanceStep("Check-in", "Confirm your attendance at the counter", isCompleted = false),
+    GuidanceStep("Passport Control", "Verify your travel documents", isCompleted = false),
+    GuidanceStep("Boarding", "Proceed to the assigned gate", isCompleted = false)
 )
 
 data class InboxMessage(
     val id: String,
     val title: String,
     val body: String,
-    val timestamp: Long
+    val timestamp: Long,
+    val actionLabel: String? = null,
+    val stepToComplete: Int? = null
+)
+
+data class FriendGroup(
+    val id: String,
+    val name: String,
+    val memberCount: Int,
+    val distance: String
 )

@@ -7,8 +7,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -147,7 +145,7 @@ fun DevToolScreen(
                     val newMessage = InboxMessage(
                         id = UUID.randomUUID().toString(),
                         title = "Gate Proximity Alert",
-                        body = "You are currently 5 minutes away from your gate. Boarding closes in 20 minutes.",
+                        body = "You are currently 5 minutes away from your gate. Your flight leaves in 20 minutes.",
                         timestamp = System.currentTimeMillis()
                     )
                     onDataChanged(currentData.copy(
@@ -157,7 +155,49 @@ fun DevToolScreen(
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
             ) {
-                Text("Simulate Proximity Alert")
+                Text("Simulate Gate Proximity")
+            }
+
+            Button(
+                onClick = {
+                    val nextStepIndex = currentData.guidanceSteps.indexOfFirst { !it.isCompleted }
+                    if (nextStepIndex != -1) {
+                        val step = currentData.guidanceSteps[nextStepIndex]
+                        val newMessage = InboxMessage(
+                            id = UUID.randomUUID().toString(),
+                            title = "Checkpoint Reached",
+                            body = "You are close to the ${step.title} checkpoint. Did you complete this step?",
+                            timestamp = System.currentTimeMillis(),
+                            actionLabel = "Confirm ${step.title}",
+                            stepToComplete = nextStepIndex
+                        )
+                        onDataChanged(currentData.copy(
+                            notifications = currentData.notifications + newMessage
+                        ))
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
+            ) {
+                Text("Simulate Checkpoint Proximity")
+            }
+
+            Button(
+                onClick = {
+                    val newMessage = InboxMessage(
+                        id = UUID.randomUUID().toString(),
+                        title = "Security Wait Time",
+                        body = "The estimated waiting time for Security Control is 12 minutes.",
+                        timestamp = System.currentTimeMillis()
+                    )
+                    onDataChanged(currentData.copy(
+                        notifications = currentData.notifications + newMessage
+                    ))
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+            ) {
+                Text("Simulate Wait Time Notification")
             }
             
             Spacer(modifier = Modifier.height(32.dp))

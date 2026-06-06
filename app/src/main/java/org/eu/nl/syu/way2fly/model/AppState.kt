@@ -17,5 +17,5 @@ data class GuidanceStep(
     val title: String,
     val description: String,
     val isMandatory: Boolean = true,
-    val isCompleted: Boolean = false
+    var isCompleted: Boolean = false
 )

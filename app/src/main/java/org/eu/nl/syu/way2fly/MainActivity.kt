@@ -4,7 +4,13 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.*
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Logout
@@ -32,30 +38,28 @@ class MainActivity : ComponentActivity() {
             Way2FlyTheme {
                 val navController = rememberNavController()
                 var boardingPassData by remember { mutableStateOf<BoardingPassData?>(null) }
-                var helpRequests by remember { mutableStateOf(listOf<HelpRequest>()) }
-                var staffNotifications by remember { mutableStateOf(listOf<InboxMessage>()) }
-                var passengerDatabase by remember { mutableStateOf(generateRandomPassengers(50)) }
 
                 NavHost(
                     navController = navController,
-                    startDestination = "auth"
+                    startDestination = "auth",
+                    enterTransition = { fadeIn(tween(400)) + slideInHorizontally(tween(400)) { it } },
+                    exitTransition = { fadeOut(tween(400)) + slideOutHorizontally(tween(400)) { -it } }
                 ) {
                     composable("auth") {
                         AuthScreen(
                             onPassengerAuthenticated = { data ->
-                                boardingPassData = data
-                                if (!passengerDatabase.any { it.pnr == data.pnr }) {
-                                    passengerDatabase = passengerDatabase + data
-                                }
+                                // Initialize with some dummy groups for demonstration
+                                val initialGroups = listOf(
+                                    FriendGroup(UUID.randomUUID().toString(), "Family Vacation", 4, "Nearby"),
+                                    FriendGroup(UUID.randomUUID().toString(), "Project Team", 3, "20m")
+                                )
+                                boardingPassData = data.copy(activeGroups = initialGroups)
                                 navController.navigate("passenger_main") { popUpTo("auth") { inclusive = true } }
                                 sendPassengerNotification(
                                     "Gate Proximity Alert",
                                     "You are 8 minutes away from Gate B12. Boarding starts in 20 minutes.",
                                     boardingPassData
                                 ) { boardingPassData = it }
-                            },
-                            onStaffAuthenticated = {
-                                navController.navigate("staff_main") { popUpTo("auth") { inclusive = true } }
                             }
                         )
                     }
@@ -71,38 +75,27 @@ class MainActivity : ComponentActivity() {
                                     boardingPassData = data.copy(guidanceSteps = newSteps)
                                 },
                                 onOpenDev = { navController.navigate("dev") },
+                                onDeleteNotification = { id ->
+                                    boardingPassData = data.copy(notifications = data.notifications.filter { it.id != id })
+                                },
+                                onCreateGroup = { name ->
+                                    val newGroup = FriendGroup(UUID.randomUUID().toString(), name, 1, "0m")
+                                    boardingPassData = data.copy(activeGroups = data.activeGroups + newGroup)
+                                },
+                                onDeleteGroup = { id ->
+                                    boardingPassData = data.copy(activeGroups = data.activeGroups.filter { it.id != id })
+                                },
+                                onRenameGroup = { id, newName ->
+                                    boardingPassData = data.copy(activeGroups = data.activeGroups.map { 
+                                        if (it.id == id) it.copy(name = newName) else it 
+                                    })
+                                },
                                 onLogout = {
                                     boardingPassData = null
                                     navController.navigate("auth") { popUpTo(0) }
                                 }
                             )
                         }
-                    }
-
-                    composable("staff_main") {
-                        StaffMainScreen(
-                            helpRequests = helpRequests,
-                            notifications = staffNotifications,
-                            passengers = passengerDatabase,
-                            onSendHelpRequest = { urgency, location ->
-                                val id = UUID.randomUUID().toString()
-                                val req = HelpRequest(id, urgency, "General", location, System.currentTimeMillis(), "Help at $location")
-                                helpRequests = helpRequests + req
-                                staffNotifications = staffNotifications + InboxMessage(id, "Help Requested (Level $urgency)", "Location: $location", System.currentTimeMillis())
-                            },
-                            onSecurityAction = { passenger, action ->
-                                val id = UUID.randomUUID().toString()
-                                staffNotifications = staffNotifications + InboxMessage(
-                                    id = id,
-                                    title = "SECURITY ALERT: $action",
-                                    body = "Action taken for ${passenger.passengerName} (TS: ${passenger.threatScore}). PNR: ${passenger.pnr}",
-                                    timestamp = System.currentTimeMillis()
-                                )
-                            },
-                            onLogout = { 
-                                navController.navigate("auth") { popUpTo(0) }
-                            }
-                        )
                     }
 
                     composable("dev") {
@@ -125,27 +118,6 @@ class MainActivity : ComponentActivity() {
             onUpdate(it.copy(notifications = it.notifications + newMessage))
         }
     }
-
-    private fun generateRandomPassengers(count: Int): List<BoardingPassData> {
-        val firstNames = listOf("Mihai", "Elena", "Andrei", "Maria", "Stefan", "Ioana", "Radu", "Cristina", "Alexandru", "Anca")
-        val lastNames = listOf("Popescu", "Ionescu", "Dumitru", "Stan", "Gheorghe", "Rusu", "Matei", "Vasile", "Constantin", "Dinu")
-        val cities = listOf("OTP", "CLJ", "TSR", "IAS", "LHR", "FRA", "CDG", "AMS")
-        
-        return List(count) {
-            val name = "${lastNames.random()}/${firstNames.random()}"
-            BoardingPassData(
-                passengerName = name,
-                pnr = UUID.randomUUID().toString().substring(0, 6).uppercase(),
-                from = cities.random(),
-                to = cities.random(),
-                carrier = "RO",
-                flightNumber = String.format("%05d", (1..99999).random()),
-                date = "123",
-                seat = "${(1..30).random()}${('A'..'F').random()}",
-                threatScore = (0..100).random()
-            )
-        }
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -153,25 +125,18 @@ class MainActivity : ComponentActivity() {
 fun PassengerMainScreen(
     data: BoardingPassData,
     onStepToggled: (Int) -> Unit,
+    onDeleteNotification: (String) -> Unit,
+    onCreateGroup: (String) -> Unit,
+    onDeleteGroup: (String) -> Unit,
+    onRenameGroup: (String, String) -> Unit,
     onOpenDev: () -> Unit,
     onLogout: () -> Unit
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
 
     Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("Way2Fly", fontWeight = FontWeight.Bold, color = Color.White) },
-                actions = {
-                    IconButton(onClick = onLogout) {
-                        Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Switch Account", tint = Color.White)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primary)
-            )
-        },
         bottomBar = {
-            NavigationBar {
+            NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 8.dp) {
                 NavigationBarItem(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
@@ -197,6 +162,12 @@ fun PassengerMainScreen(
                 NavigationBarItem(
                     selected = selectedTab == 3,
                     onClick = { selectedTab = 3 },
+                    icon = { Icon(Icons.Default.Groups, null) },
+                    label = { Text("Groups") }
+                )
+                NavigationBarItem(
+                    selected = selectedTab == 4,
+                    onClick = { selectedTab = 4 },
                     icon = { Icon(Icons.Default.Description, null) },
                     label = { Text("Data") }
                 )
@@ -204,17 +175,24 @@ fun PassengerMainScreen(
         }
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding)) {
-            when (selectedTab) {
-                0 -> MapScreen()
-                1 -> GuidanceScreen(data.guidanceSteps, onStepToggled)
-                2 -> InboxScreen(data.notifications)
-                3 -> {
-                    Column {
-                        IconButton(onClick = onOpenDev, modifier = Modifier.align(Alignment.End)) {
-                            Icon(Icons.Default.Settings, null)
-                        }
-                        DetailsScreen(data)
-                    }
+            AnimatedContent(
+                targetState = selectedTab,
+                transitionSpec = {
+                    fadeIn(tween(300)) togetherWith fadeOut(tween(300))
+                },
+                label = "tab_switch"
+            ) { targetTab ->
+                when (targetTab) {
+                    0 -> MapScreen()
+                    1 -> GuidanceScreen(data.guidanceSteps, onStepToggled)
+                    2 -> InboxScreen(data.notifications, onStepToggled, onDeleteNotification)
+                    3 -> GroupsScreen(
+                        groups = data.activeGroups,
+                        onCreateGroup = onCreateGroup,
+                        onDeleteGroup = onDeleteGroup,
+                        onRenameGroup = onRenameGroup
+                    )
+                    4 -> DetailsScreen(data, onLogout)
                 }
             }
         }
