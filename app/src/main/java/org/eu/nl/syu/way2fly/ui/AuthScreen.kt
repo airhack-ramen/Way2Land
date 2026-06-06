@@ -1,21 +1,17 @@
 package org.eu.nl.syu.way2fly.ui
 
 import android.Manifest
-import android.content.Context
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.net.Uri
-import android.provider.Settings
-import android.telephony.TelephonyManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.annotation.OptIn
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -26,12 +22,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.core.content.ContextCompat
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -42,6 +38,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview as ComposePreview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.common.InputImage
@@ -54,61 +51,39 @@ fun AuthScreen(
     onPassengerAuthenticated: (BoardingPassData) -> Unit,
     onStaffAuthenticated: () -> Unit
 ) {
-    var selectedTabIndex by remember { mutableIntStateOf(0) }
+    var selectedTabIndex by remember { mutableIntStateOf(0) } 
     val scrollState = rememberScrollState()
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-    ) {
+    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        BrandedHeader(
+            title = "Way2Fly",
+            subtitle = if (selectedTabIndex == 0) "Passenger Portal" else "Staff Management",
+            isCompact = false // Login screen remains large
+        ) {
+            Surface(
+                modifier = Modifier.size(50.dp),
+                shape = RoundedCornerShape(12.dp),
+                color = Color.White.copy(alpha = 0.2f)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.AirplanemodeActive,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(30.dp)
+                    )
+                }
+            }
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(scrollState)
-                .padding(horizontal = 24.dp, vertical = 32.dp),
+                .padding(top = 160.dp) // Adjusted for large header
+                .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(48.dp))
-
-            // App logo / brand
-            Box(
-                modifier = Modifier.size(96.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(28.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    tonalElevation = 0.dp
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AirplanemodeActive,
-                        contentDescription = null,
-                        modifier = Modifier.size(52.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Text(
-                text = "Way2Fly",
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.ExtraBold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Text(
-                text = "Your journey starts here",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(40.dp))
-
             RoleSelector(
                 selectedRole = selectedTabIndex,
                 onRoleSelected = { selectedTabIndex = it }
@@ -116,23 +91,27 @@ fun AuthScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            if (selectedTabIndex == 0) {
-                PassengerAuthCard(onPassengerAuthenticated)
-            } else {
-                StaffAuthCard(onStaffAuthenticated)
+            AnimatedContent(
+                targetState = selectedTabIndex,
+                transitionSpec = {
+                    fadeIn(animationSpec = tween(300)) togetherWith fadeOut(animationSpec = tween(300))
+                },
+                label = "auth_card"
+            ) { targetIndex ->
+                if (targetIndex == 0) {
+                    PassengerAuthCard(onPassengerAuthenticated)
+                } else {
+                    StaffAuthCard(onStaffAuthenticated)
+                }
             }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
+            
+            Spacer(modifier = Modifier.height(32.dp))
             Text(
-                text = "By continuing, you agree to our Terms of Service & Privacy Policy",
+                text = "By entering, you agree to our Terms of Service",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
-                textAlign = TextAlign.Center,
-                maxLines = 2
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                textAlign = TextAlign.Center
             )
-
-            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
@@ -144,15 +123,16 @@ private fun RoleSelector(
 ) {
     val roles = listOf(
         "Passenger" to Icons.Default.Person,
-        "Staff" to Icons.Default.AirplanemodeActive
+        "Staff" to Icons.Default.Badge
     )
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(52.dp)
-            .clip(RoundedCornerShape(26.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+            .height(56.dp)
+            .clip(RoundedCornerShape(28.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            .padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         roles.forEachIndexed { index, (label, icon) ->
@@ -161,7 +141,7 @@ private fun RoleSelector(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .clip(RoundedCornerShape(26.dp))
+                    .clip(RoundedCornerShape(24.dp))
                     .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
                     .clickable { onRoleSelected(index) },
                 contentAlignment = Alignment.Center
@@ -173,14 +153,14 @@ private fun RoleSelector(
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp)
+                        tint = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
                     )
                     Text(
-                        text = label,
+                        text = label.uppercase(),
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
-                        color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -193,508 +173,81 @@ fun PassengerAuthCard(onAuthenticated: (BoardingPassData) -> Unit) {
     var phoneNumber by remember { mutableStateOf("") }
     var scannedData by remember { mutableStateOf<BoardingPassData?>(null) }
     var scanError by remember { mutableStateOf<String?>(null) }
-    var permissionState by remember { mutableStateOf<PermissionState>(PermissionState.Initial) }
 
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Column(
-            modifier = Modifier.padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
+        Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             if (scannedData == null) {
-                SectionLabel(
-                    text = "Boarding pass",
-                    icon = Icons.Default.CreditCard
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(220.dp)
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                ) {
+                Text("Scan Boarding Pass", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 16.dp))
+                
+                Box(modifier = Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(20.dp)).background(Color.Black)) {
                     if (LocalInspectionMode.current) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.CameraAlt,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(48.dp)
-                            )
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.CameraAlt, contentDescription = null, tint = Color.White, modifier = Modifier.size(48.dp))
                         }
                     } else {
                         CameraPreview(onBarcodeScanned = { barcode ->
                             val data = BCBPParser.parse(barcode)
-                            if (data != null) {
-                                scannedData = data
-                                scanError = null
-                            } else {
-                                scanError = "Invalid boarding pass format"
-                            }
+                            if (data != null) { scannedData = data; scanError = null }
+                            else { scanError = "Invalid boarding pass format" }
                         })
                     }
                     ScannerOverlay()
                 }
-
+                
                 if (scanError != null) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = scanError!!,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.labelMedium
-                    )
+                    Text(scanError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 8.dp))
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
-
-                TextButton(onClick = {
-                    val testRaw = "M1DOE/JOHN            EABCDEFJFKLAXDL 00123123Y001A00001 1"
-                    scannedData = BCBPParser.parse(testRaw)
-                }) {
-                    Text(
-                        text = "Use test boarding pass",
-                        color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.labelLarge
-                    )
+                TextButton(
+                    onClick = {
+                        val testRaw = "M1DOE/JOHN            EABCDEFJFKLAXDL 00123123Y001A00001 1"
+                        scannedData = BCBPParser.parse(testRaw)
+                    }
+                ) {
+                    Text("Use test boarding pass", color = MaterialTheme.colorScheme.primary)
                 }
             } else {
                 SuccessScanView(scannedData!!) { scannedData = null }
             }
 
-            if (scannedData != null) {
-                Spacer(modifier = Modifier.height(4.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 24.dp).alpha(0.1f))
 
-                SectionLabel(
-                    text = "Phone number",
-                    icon = Icons.Default.Phone
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                when (permissionState) {
-                    PermissionState.Initial -> {
-                        PhonePermissionRequestCard(
-                            onGrantPermission = { permissionState = PermissionState.Requesting },
-                            onEnterManually = { permissionState = PermissionState.ManualEntry }
-                        )
-                    }
-                    PermissionState.Requesting -> {
-                        PermissionRequestScreen(
-                            onPermissionGranted = { phone ->
-                                phoneNumber = phone
-                                permissionState = PermissionState.Completed
-                            },
-                            onPermissionDenied = { permissionState = PermissionState.ManualEntry },
-                            onGoBack = { permissionState = PermissionState.Initial }
-                        )
-                    }
-                    PermissionState.ManualEntry -> {
-                        PhoneNumberInput(
-                            phoneNumber = phoneNumber,
-                            onPhoneNumberChange = { phoneNumber = it },
-                            onBack = { permissionState = PermissionState.Initial }
-                        )
-                    }
-                    PermissionState.Completed -> {
-                        PhoneNumberConfirmed(
-                            phoneNumber = phoneNumber,
-                            onEdit = { permissionState = PermissionState.ManualEntry }
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                val isPhoneValid = phoneNumber == "0" || (phoneNumber.length >= 10 && phoneNumber.all { it.isDigit() })
-
-                Button(
-                    onClick = { scannedData?.let { onAuthenticated(it.copy(phoneNumber = phoneNumber)) } },
-                    enabled = scannedData != null && isPhoneValid,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    )
-                ) {
-                    Text(
-                        text = "Enter app",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                if (phoneNumber.isNotEmpty() && !isPhoneValid) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Enter 10 digits or '0'",
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SectionLabel(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            modifier = Modifier.size(18.dp),
-            tint = MaterialTheme.colorScheme.primary
-        )
-        Text(
-            text = text,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-    }
-}
-
-private enum class PermissionState {
-    Initial,
-    Requesting,
-    ManualEntry,
-    Completed
-}
-
-@Composable
-private fun PhonePermissionRequestCard(
-    onGrantPermission: () -> Unit,
-    onEnterManually: () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest)
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Smartphone,
-                    contentDescription = null,
-                    modifier = Modifier.size(28.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            Text(
-                text = "Auto-fill phone number?",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Text(
-                text = "We can automatically read your number from your SIM card.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Row(
+            OutlinedTextField(
+                value = phoneNumber,
+                onValueChange = { phoneNumber = it },
+                label = { Text("Phone Number") },
+                leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) },
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                OutlinedButton(
-                    onClick = onEnterManually,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(14.dp),
-                    contentPadding = PaddingValues(vertical = 14.dp)
-                ) {
-                    Text(
-                        text = "Enter manually",
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                }
-
-                Button(
-                    onClick = onGrantPermission,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(14.dp),
-                    contentPadding = PaddingValues(vertical = 14.dp)
-                ) {
-                    Text(
-                        text = "Auto-fill",
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PermissionRequestScreen(
-    onPermissionGranted: (String) -> Unit,
-    onPermissionDenied: () -> Unit,
-    onGoBack: () -> Unit
-) {
-    val context = LocalContext.current
-    var isProcessing by remember { mutableStateOf(true) }
-
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val phoneGranted = permissions[Manifest.permission.READ_PHONE_NUMBERS] == true ||
-                permissions[Manifest.permission.READ_PHONE_STATE] == true
-
-        if (phoneGranted) {
-            @Suppress("DEPRECATION")
-            val telephonyManager = context.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
-            if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_NUMBERS) == PackageManager.PERMISSION_GRANTED ||
-                ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) {
-                @Suppress("DEPRECATION")
-                val number = runCatching { telephonyManager.line1Number }.getOrNull()
-                if (!number.isNullOrBlank()) {
-                    onPermissionGranted(number.filter { it.isDigit() })
-                } else {
-                    onPermissionDenied()
-                }
-            } else {
-                onPermissionDenied()
-            }
-        } else {
-            onPermissionDenied()
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        permissionLauncher.launch(
-            arrayOf(
-                Manifest.permission.READ_PHONE_NUMBERS,
-                Manifest.permission.READ_PHONE_STATE
+                shape = RoundedCornerShape(16.dp),
+                singleLine = true,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Phone)
             )
-        )
-    }
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest)
-    ) {
-        Column(
-            modifier = Modifier.padding(28.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            if (isProcessing) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(40.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    strokeWidth = 3.dp
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Text(
-                    text = "Requesting permission...",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Default.Block,
-                    contentDescription = null,
-                    modifier = Modifier.size(44.dp),
-                    tint = MaterialTheme.colorScheme.error
-                )
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                Text(
-                    text = "Permission required",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                Spacer(modifier = Modifier.height(6.dp))
-
-                Text(
-                    text = "Please enable phone permission in Settings to auto-fill your number.",
-                    style = MaterialTheme.typography.bodySmall,
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = onGoBack,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(14.dp),
-                        contentPadding = PaddingValues(vertical = 14.dp)
-                    ) {
-                        Text(text = "Back", style = MaterialTheme.typography.labelLarge)
-                    }
-
-                    Button(
-                        onClick = {
-                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                data = Uri.fromParts("package", context.packageName, null)
-                            }
-                            context.startActivity(intent)
-                        },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(14.dp),
-                        contentPadding = PaddingValues(vertical = 14.dp)
-                    ) {
-                        Text(text = "Open Settings", style = MaterialTheme.typography.labelLarge)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PhoneNumberInput(
-    phoneNumber: String,
-    onPhoneNumberChange: (String) -> Unit,
-    onBack: () -> Unit
-) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
-            }
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                text = "Enter phone number",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        OutlinedTextField(
-            value = phoneNumber,
-            onValueChange = onPhoneNumberChange,
-            label = { Text("Phone Number") },
-            leadingIcon = {
-                Icon(
-                    Icons.Default.Phone,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            singleLine = true,
-            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Phone),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                unfocusedBorderColor = MaterialTheme.colorScheme.outline
-            )
-        )
-
-        if (phoneNumber.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(24.dp))
+            
             val isPhoneValid = phoneNumber == "0" || (phoneNumber.length >= 10 && phoneNumber.all { it.isDigit() })
-            if (!isPhoneValid) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Enter 10 digits or '0'",
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.labelSmall
-                )
-            }
-        }
-    }
-}
 
-@Composable
-private fun PhoneNumberConfirmed(phoneNumber: String, onEdit: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-    ) {
-        Row(
-            modifier = Modifier.padding(18.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(MaterialTheme.colorScheme.primary),
-                contentAlignment = Alignment.Center
+            Button(
+                onClick = { scannedData?.let { onAuthenticated(it.copy(phoneNumber = phoneNumber)) } },
+                enabled = scannedData != null && isPhoneValid,
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary, contentColor = Color.White)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.onPrimary
-                )
+                Text("ENTER APP", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
-
-            Spacer(modifier = Modifier.width(14.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
+            
+            if (phoneNumber.isNotEmpty() && !isPhoneValid) {
                 Text(
-                    text = "Phone number saved",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = phoneNumber,
+                    "Invalid phone (Enter 10 digits or '0')",
+                    color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            TextButton(onClick = onEdit) {
-                Text(
-                    text = "Edit",
-                    color = MaterialTheme.colorScheme.primary,
-                    style = MaterialTheme.typography.labelLarge
+                    modifier = Modifier.padding(top = 4.dp)
                 )
             }
         }
@@ -710,62 +263,39 @@ fun StaffAuthCard(onAuthenticated: () -> Unit) {
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Column(
-            modifier = Modifier.padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            SectionLabel(text = "Staff login", icon = Icons.Default.Badge)
-
-            Spacer(modifier = Modifier.height(20.dp))
-
+        Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("Staff Credentials", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 24.dp))
+            
             OutlinedTextField(
                 value = username,
                 onValueChange = { username = it },
                 label = { Text("Username") },
-                leadingIcon = {
-                    Icon(
-                        Icons.Default.Person,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                },
+                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 singleLine = true
             )
-
-            Spacer(modifier = Modifier.height(14.dp))
-
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
             OutlinedTextField(
                 value = password,
                 onValueChange = { password = it },
                 label = { Text("Password") },
-                leadingIcon = {
-                    Icon(
-                        Icons.Default.Lock,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                },
+                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation()
             )
-
+            
             if (error != null) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = error!!,
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.labelMedium
-                )
+                Text(error!!, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
             }
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
             Button(
                 onClick = {
@@ -775,20 +305,11 @@ fun StaffAuthCard(onAuthenticated: () -> Unit) {
                         error = "Invalid admin credentials"
                     }
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
+                modifier = Modifier.fillMaxWidth().height(56.dp),
                 shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                )
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
-                Text(
-                    text = "Staff login",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
+                Text("STAFF LOGIN", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -798,107 +319,28 @@ fun StaffAuthCard(onAuthenticated: () -> Unit) {
 fun ScannerOverlay() {
     Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         val color = MaterialTheme.colorScheme.primary
-        Surface(
-            modifier = Modifier.size(28.dp, 3.dp).align(Alignment.TopStart),
-            color = color,
-            shape = RoundedCornerShape(2.dp)
-        ) {}
-        Surface(
-            modifier = Modifier.size(3.dp, 28.dp).align(Alignment.TopStart),
-            color = color,
-            shape = RoundedCornerShape(2.dp)
-        ) {}
-        Surface(
-            modifier = Modifier.size(28.dp, 3.dp).align(Alignment.TopEnd),
-            color = color,
-            shape = RoundedCornerShape(2.dp)
-        ) {}
-        Surface(
-            modifier = Modifier.size(3.dp, 28.dp).align(Alignment.TopEnd),
-            color = color,
-            shape = RoundedCornerShape(2.dp)
-        ) {}
-        Surface(
-            modifier = Modifier.size(28.dp, 3.dp).align(Alignment.BottomStart),
-            color = color,
-            shape = RoundedCornerShape(2.dp)
-        ) {}
-        Surface(
-            modifier = Modifier.size(3.dp, 28.dp).align(Alignment.BottomStart),
-            color = color,
-            shape = RoundedCornerShape(2.dp)
-        ) {}
-        Surface(
-            modifier = Modifier.size(28.dp, 3.dp).align(Alignment.BottomEnd),
-            color = color,
-            shape = RoundedCornerShape(2.dp)
-        ) {}
-        Surface(
-            modifier = Modifier.size(3.dp, 28.dp).align(Alignment.BottomEnd),
-            color = color,
-            shape = RoundedCornerShape(2.dp)
-        ) {}
+        Surface(modifier = Modifier.size(28.dp, 3.dp).align(Alignment.TopStart), color = color, shape = RoundedCornerShape(2.dp)) {}
+        Surface(modifier = Modifier.size(3.dp, 28.dp).align(Alignment.TopStart), color = color, shape = RoundedCornerShape(2.dp)) {}
+        Surface(modifier = Modifier.size(28.dp, 3.dp).align(Alignment.TopEnd), color = color, shape = RoundedCornerShape(2.dp)) {}
+        Surface(modifier = Modifier.size(3.dp, 28.dp).align(Alignment.TopEnd), color = color, shape = RoundedCornerShape(2.dp)) {}
+        Surface(modifier = Modifier.size(28.dp, 3.dp).align(Alignment.BottomStart), color = color, shape = RoundedCornerShape(2.dp)) {}
+        Surface(modifier = Modifier.size(3.dp, 28.dp).align(Alignment.BottomStart), color = color, shape = RoundedCornerShape(2.dp)) {}
+        Surface(modifier = Modifier.size(28.dp, 3.dp).align(Alignment.BottomEnd), color = color, shape = RoundedCornerShape(2.dp)) {}
+        Surface(modifier = Modifier.size(3.dp, 28.dp).align(Alignment.BottomEnd), color = color, shape = RoundedCornerShape(2.dp)) {}
     }
 }
 
 @Composable
 fun SuccessScanView(data: BoardingPassData, onRescan: () -> Unit) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.primaryContainer)
-            .padding(20.dp),
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.primaryContainer).padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(MaterialTheme.colorScheme.primary),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.Check,
-                contentDescription = null,
-                modifier = Modifier.size(26.dp),
-                tint = MaterialTheme.colorScheme.onPrimary
-            )
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        Text(
-            text = "Board pass scanned",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-
-        Spacer(modifier = Modifier.height(4.dp))
-
-        Text(
-            text = data.passengerName,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-
-        Text(
-            text = "Flight ${data.carrier}${data.flightNumber}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        TextButton(onClick = onRescan) {
-            Text(
-                text = "Rescan",
-                color = MaterialTheme.colorScheme.primary,
-                style = MaterialTheme.typography.labelLarge
-            )
-        }
+        Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(48.dp))
+        Spacer(modifier = Modifier.height(8.dp))
+        Text("Boarding pass scanned", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+        Text(data.passengerName, style = MaterialTheme.typography.bodyMedium)
+        TextButton(onClick = onRescan) { Text("Rescan") }
     }
 }
 
@@ -912,14 +354,10 @@ fun CameraPreview(onBarcodeScanned: (String) -> Unit) {
 
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        cameraPermissionGranted = granted
-    }
+    ) { granted -> cameraPermissionGranted = granted }
 
     LaunchedEffect(cameraPermissionGranted) {
-        if (!cameraPermissionGranted) {
-            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
-        }
+        if (!cameraPermissionGranted) { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -931,8 +369,7 @@ fun CameraPreview(onBarcodeScanned: (String) -> Unit) {
                     cameraProviderFuture.addListener({
                         try {
                             val cameraProvider = cameraProviderFuture.get()
-                            val preview = Preview.Builder().build().also { it.surfaceProvider =
-                                previewView.surfaceProvider }
+                            val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
                             val scanner = BarcodeScanning.getClient()
                             val imageAnalysis = ImageAnalysis.Builder().setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST).build()
                             imageAnalysis.setAnalyzer(executor) { imageProxy ->
@@ -953,26 +390,8 @@ fun CameraPreview(onBarcodeScanned: (String) -> Unit) {
                 modifier = Modifier.fillMaxSize()
             )
         } else {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        imageVector = Icons.Default.CameraAlt,
-                        contentDescription = null,
-                        modifier = Modifier.size(48.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Camera permission required",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+            Box(modifier = Modifier.fillMaxSize().background(Color.DarkGray), contentAlignment = Alignment.Center) {
+                Text("Camera permission required", color = Color.White)
             }
         }
     }

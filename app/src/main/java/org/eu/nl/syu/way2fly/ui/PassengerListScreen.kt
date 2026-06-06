@@ -1,5 +1,6 @@
 package org.eu.nl.syu.way2fly.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -29,28 +30,45 @@ fun PassengerListScreen(
         it.pnr.contains(searchQuery, ignoreCase = true)
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text(
-            text = "Passenger Management",
-            style = MaterialTheme.typography.headlineMedium,
-            modifier = Modifier.padding(vertical = 16.dp)
-        )
+    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            BrandedHeader(
+                title = "Users",
+                subtitle = "Security & Monitoring",
+                isCompact = true
+            ) {
+                Surface(
+                    modifier = Modifier.size(40.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color.White.copy(alpha = 0.2f)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.Groups, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    }
+                }
+            }
 
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = { searchQuery = it },
-            label = { Text("Search by Name or PNR") },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-            shape = RoundedCornerShape(12.dp)
-        )
+            Column(modifier = Modifier.padding(16.dp)) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    label = { Text("Search by Name or PNR") },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                    )
+                )
 
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(bottom = 16.dp)
-        ) {
-            items(filteredPassengers) { passenger ->
-                PassengerCard(passenger, onSecurityAction)
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(bottom = 16.dp)
+                ) {
+                    items(filteredPassengers) { passenger ->
+                        PassengerCard(passenger, onSecurityAction)
+                    }
+                }
             }
         }
     }
@@ -65,15 +83,16 @@ fun PassengerCard(
     
     val threatColor = when {
         passenger.threatScore > 80 -> Color.Red
-        passenger.threatScore > 40 -> Color(0xFFF39200) // Orange
+        passenger.threatScore > 40 -> MaterialTheme.colorScheme.secondary // Orange
         else -> Color(0xFF4CAF50) // Green
     }
 
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(20.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -95,7 +114,7 @@ fun PassengerCard(
                 Surface(
                     color = threatColor.copy(alpha = 0.1f),
                     shape = RoundedCornerShape(8.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, threatColor)
+                    border = BorderStroke(1.dp, threatColor)
                 ) {
                     Text(
                         text = "TS: ${passenger.threatScore}",
@@ -107,15 +126,22 @@ fun PassengerCard(
                 }
             }
             
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
             ) {
                 Box {
-                    IconButton(onClick = { expanded = true }) {
-                        Icon(Icons.Default.Security, contentDescription = "Security Actions", tint = MaterialTheme.colorScheme.error)
+                    Button(
+                        onClick = { expanded = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                    ) {
+                        Icon(Icons.Default.Security, null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("SECURITY ACTION", style = MaterialTheme.typography.labelMedium)
                     }
                     
                     DropdownMenu(

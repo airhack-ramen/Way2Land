@@ -18,12 +18,16 @@ import androidx.compose.ui.unit.dp
 fun BrandedHeader(
     title: String,
     subtitle: String? = null,
+    isCompact: Boolean = true, // Default to compact for most screens
     actions: @Composable RowScope.() -> Unit = {}
 ) {
+    val headerHeight = if (isCompact) 100.dp else 180.dp
+    val verticalPadding = if (isCompact) 16.dp else 32.dp
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(180.dp)
+            .height(headerHeight)
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
@@ -36,7 +40,7 @@ fun BrandedHeader(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp, vertical = 32.dp),
+                .padding(horizontal = 24.dp, vertical = verticalPadding),
             horizontalAlignment = Alignment.Start,
             verticalArrangement = Arrangement.Bottom
         ) {

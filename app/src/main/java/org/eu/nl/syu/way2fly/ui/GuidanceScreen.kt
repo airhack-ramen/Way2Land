@@ -1,11 +1,13 @@
 package org.eu.nl.syu.way2fly.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -21,32 +23,38 @@ fun GuidanceScreen(
     steps: List<GuidanceStep>,
     onStepToggled: (Int) -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text(
-            text = "Steps and Advice",
-            style = MaterialTheme.typography.headlineMedium,
-            modifier = Modifier.padding(vertical = 16.dp)
-        )
-        
-        Text(
-            text = "Follow these mandatory steps to ensure a smooth boarding process at Iasi Airport.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-            modifier = Modifier.padding(bottom = 24.dp)
-        )
+    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            BrandedHeader(
+                title = "Steps & Advice",
+                subtitle = "Mandatory procedures",
+                isCompact = true
+            ) {
+                Surface(
+                    modifier = Modifier.size(40.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color.White.copy(alpha = 0.2f)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.List, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    }
+                }
+            }
 
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.weight(1f)
-        ) {
-            itemsIndexed(steps) { index, step ->
-                StepCard(step = step, onClick = { onStepToggled(index) })
+            Column(modifier = Modifier.padding(16.dp)) {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    itemsIndexed(steps) { index, step ->
+                        StepCard(step = step, onClick = { onStepToggled(index) })
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                AdviceCard()
             }
         }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        AdviceCard()
     }
 }
 
@@ -55,9 +63,9 @@ fun StepCard(step: GuidanceStep, onClick: () -> Unit) {
     ElevatedCard(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.elevatedCardColors(
-            containerColor = if (step.isCompleted) Color(0xFFE8F5E9) else MaterialTheme.colorScheme.surface
+            containerColor = if (step.isCompleted) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface
         )
     ) {
         Row(
@@ -67,7 +75,7 @@ fun StepCard(step: GuidanceStep, onClick: () -> Unit) {
             Icon(
                 imageVector = if (step.isCompleted) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
                 contentDescription = null,
-                tint = if (step.isCompleted) Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary,
+                tint = if (step.isCompleted) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(28.dp)
             )
             
@@ -78,12 +86,12 @@ fun StepCard(step: GuidanceStep, onClick: () -> Unit) {
                     text = step.title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    textDecoration = if (step.isCompleted) androidx.compose.ui.text.style.TextDecoration.LineThrough else null
+                    color = if (step.isCompleted) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = step.description,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    color = (if (step.isCompleted) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface).copy(alpha = 0.7f)
                 )
             }
         }
@@ -94,15 +102,15 @@ fun StepCard(step: GuidanceStep, onClick: () -> Unit) {
 fun AdviceCard() {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-        shape = RoundedCornerShape(12.dp)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+        shape = RoundedCornerShape(16.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Airport Advice", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSecondaryContainer)
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text("Airport Advice", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
             Text(
                 "Arrive at the gate at least 30 minutes before departure. Keep your boarding pass and ID ready.",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
             )
         }
     }

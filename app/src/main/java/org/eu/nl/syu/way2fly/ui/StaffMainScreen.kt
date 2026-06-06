@@ -11,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -33,33 +34,27 @@ fun StaffMainScreen(
     var selectedTab by remember { mutableIntStateOf(0) }
 
     Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("Way2Fly - STAFF", fontWeight = FontWeight.Bold, color = Color.White) },
-                actions = {
-                    IconButton(onClick = onLogout) { Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Logout", tint = Color.White) }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.error)
-            )
-        },
         bottomBar = {
-            NavigationBar {
+            NavigationBar(
+                containerColor = MaterialTheme.colorScheme.surface,
+                tonalElevation = 8.dp
+            ) {
                 NavigationBarItem(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
-                    icon = { Icon(Icons.Default.Map, contentDescription = "Map") },
+                    icon = { Icon(Icons.Default.Map, null) },
                     label = { Text("Task Map") }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
-                    icon = { Icon(Icons.Default.Emergency, contentDescription = "Help") },
+                    icon = { Icon(Icons.Default.Emergency, null) },
                     label = { Text("Help") }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 2,
                     onClick = { selectedTab = 2 },
-                    icon = { Icon(Icons.Default.Groups, contentDescription = "Passengers") },
+                    icon = { Icon(Icons.Default.Groups, null) },
                     label = { Text("Users") }
                 )
                 NavigationBarItem(
@@ -67,7 +62,7 @@ fun StaffMainScreen(
                     onClick = { selectedTab = 3 },
                     icon = { 
                         BadgedBox(badge = { if (notifications.isNotEmpty()) Badge { Text(notifications.size.toString()) } }) {
-                            Icon(Icons.Default.Inbox, contentDescription = "Inbox")
+                            Icon(Icons.Default.Inbox, null)
                         }
                     },
                     label = { Text("Staff Inbox") }
@@ -77,8 +72,22 @@ fun StaffMainScreen(
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding).fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             when (selectedTab) {
-                0 -> MapScreen(role = "STAFF", helpRequests = helpRequests)
-                1 -> HelpToolTab(onSendHelpRequest)
+                0 -> {
+                    Column {
+                        BrandedHeader(title = "Task Map", subtitle = "Emergency coordination") {
+                            IconButton(onClick = onLogout) { Icon(Icons.AutoMirrored.Filled.Logout, null, tint = Color.White) }
+                        }
+                        MapScreen(role = "STAFF", helpRequests = helpRequests)
+                    }
+                }
+                1 -> {
+                    Column {
+                        BrandedHeader(title = "Broadcast", subtitle = "Request terminal assistance") {
+                            IconButton(onClick = onLogout) { Icon(Icons.AutoMirrored.Filled.Logout, null, tint = Color.White) }
+                        }
+                        HelpToolTab(onSendHelpRequest)
+                    }
+                }
                 2 -> PassengerListScreen(passengers = passengers, onSecurityAction = onSecurityAction)
                 3 -> InboxScreen(messages = notifications)
             }
@@ -126,8 +135,10 @@ fun HelpToolTab(onSendHelpRequest: (Int, String) -> Unit) {
                 label = { Text("Select Location") },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                 modifier = Modifier.menuAnchor().fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
+                shape = RoundedCornerShape(16.dp),
+                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                )
             )
             ExposedDropdownMenu(
                 expanded = expanded,
@@ -148,12 +159,12 @@ fun HelpToolTab(onSendHelpRequest: (Int, String) -> Unit) {
         Spacer(modifier = Modifier.height(32.dp))
         
         Button(
-            onClick = { onSendHelpRequest(urgency.roundToInt(), "Request at $selectedLocation") },
+            onClick = { onSendHelpRequest(urgency.roundToInt(), selectedLocation) },
             modifier = Modifier.fillMaxWidth().height(64.dp),
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(containerColor = if (urgency > 7) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
         ) {
-            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null)
+            Icon(Icons.AutoMirrored.Filled.Send, null)
             Spacer(modifier = Modifier.width(12.dp))
             Text("BROADCAST HELP REQUEST", fontWeight = FontWeight.Bold)
         }
