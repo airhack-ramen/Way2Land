@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -12,16 +14,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import org.eu.nl.syu.way2fly.model.BoardingPassData
 import org.eu.nl.syu.way2fly.model.HelpRequest
 import org.eu.nl.syu.way2fly.model.InboxMessage
 import java.util.*
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StaffMainScreen(
     helpRequests: List<HelpRequest>,
     notifications: List<InboxMessage>,
+    passengers: List<BoardingPassData>,
     onSendHelpRequest: (Int, String) -> Unit,
+    onSecurityAction: (BoardingPassData, String) -> Unit,
     onLogout: () -> Unit
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -31,7 +37,7 @@ fun StaffMainScreen(
             CenterAlignedTopAppBar(
                 title = { Text("Way2Fly - STAFF", fontWeight = FontWeight.Bold, color = Color.White) },
                 actions = {
-                    IconButton(onClick = onLogout) { Icon(Icons.Default.Logout, contentDescription = "Logout", tint = Color.White) }
+                    IconButton(onClick = onLogout) { Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Logout", tint = Color.White) }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.error)
             )
@@ -48,11 +54,17 @@ fun StaffMainScreen(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
                     icon = { Icon(Icons.Default.Emergency, contentDescription = "Help") },
-                    label = { Text("Request Help") }
+                    label = { Text("Help") }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 2,
                     onClick = { selectedTab = 2 },
+                    icon = { Icon(Icons.Default.Groups, contentDescription = "Passengers") },
+                    label = { Text("Users") }
+                )
+                NavigationBarItem(
+                    selected = selectedTab == 3,
+                    onClick = { selectedTab = 3 },
                     icon = { 
                         BadgedBox(badge = { if (notifications.isNotEmpty()) Badge { Text(notifications.size.toString()) } }) {
                             Icon(Icons.Default.Inbox, contentDescription = "Inbox")
@@ -67,16 +79,20 @@ fun StaffMainScreen(
             when (selectedTab) {
                 0 -> MapScreen(role = "STAFF", helpRequests = helpRequests)
                 1 -> HelpToolTab(onSendHelpRequest)
-                2 -> InboxScreen(messages = notifications)
+                2 -> PassengerListScreen(passengers = passengers, onSecurityAction = onSecurityAction)
+                3 -> InboxScreen(messages = notifications)
             }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HelpToolTab(onSendHelpRequest: (Int, String) -> Unit) {
     var urgency by remember { mutableFloatStateOf(5f) }
-    var details by remember { mutableStateOf("") }
+    val locations = listOf("Check-in Island", "Security T4", "Duty Free Shop", "Gate B1", "Gate B2", "Arrivals Hall", "Business Lounge")
+    var expanded by remember { mutableStateOf(false) }
+    var selectedLocation by remember { mutableStateOf(locations[0]) }
 
     Column(modifier = Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center) {
         Text("Request Assistance", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
@@ -98,27 +114,48 @@ fun HelpToolTab(onSendHelpRequest: (Int, String) -> Unit) {
         
         Spacer(modifier = Modifier.height(24.dp))
         
-        OutlinedTextField(
-            value = details,
-            onValueChange = { details = it },
-            label = { Text("Location/Type of help") },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp)
-        )
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { expanded = !expanded },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            OutlinedTextField(
+                value = selectedLocation,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Select Location") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                modifier = Modifier.menuAnchor().fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
+            )
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false }
+            ) {
+                locations.forEach { location ->
+                    DropdownMenuItem(
+                        text = { Text(location) },
+                        onClick = {
+                            selectedLocation = location
+                            expanded = false
+                        }
+                    )
+                }
+            }
+        }
         
         Spacer(modifier = Modifier.height(32.dp))
         
         Button(
-            onClick = { onSendHelpRequest(urgency.roundToInt(), details); details = "" },
+            onClick = { onSendHelpRequest(urgency.roundToInt(), "Request at $selectedLocation") },
             modifier = Modifier.fillMaxWidth().height(64.dp),
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(containerColor = if (urgency > 7) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
         ) {
-            Icon(Icons.Default.Send, contentDescription = null)
+            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null)
             Spacer(modifier = Modifier.width(12.dp))
             Text("BROADCAST HELP REQUEST", fontWeight = FontWeight.Bold)
         }
     }
 }
-
-import kotlin.math.roundToInt

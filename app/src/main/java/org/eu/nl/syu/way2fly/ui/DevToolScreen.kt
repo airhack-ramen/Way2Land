@@ -140,6 +140,24 @@ fun DevToolScreen(
                 Text("Send Test Notification")
             }
             
+            Button(
+                onClick = {
+                    val newMessage = InboxMessage(
+                        id = UUID.randomUUID().toString(),
+                        title = "Gate Proximity Alert",
+                        body = "You are currently 5 minutes away from your gate. Boarding closes in 20 minutes.",
+                        timestamp = System.currentTimeMillis()
+                    )
+                    onDataChanged(currentData.copy(
+                        notifications = currentData.notifications + newMessage
+                    ))
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+            ) {
+                Text("Simulate Proximity Alert")
+            }
+            
             Spacer(modifier = Modifier.height(32.dp))
             
             Button(

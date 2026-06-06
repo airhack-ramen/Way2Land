@@ -8,8 +8,8 @@ class BCBPParserTest {
 
     @Test
     fun testParseStandardBCBP() {
-        // M1SURNAME/NAME          EABCDEF JFKLAX DL 0123 123Y001A0001 1
-        val raw = "M1DOE/JOHN            EABCDEF JFKLAX DL 00123 123Y001A0001 1"
+        // M1DOE/JOHN            EABCDEFJFKLAXDL 00123123Y001A00001 1
+        val raw = "M1DOE/JOHN            EABCDEFJFKLAXDL 00123123Y001A00001 1"
         val data = BCBPParser.parse(raw)
 
         assertNotNull(data)
