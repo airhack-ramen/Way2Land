@@ -13,7 +13,8 @@ data class BoardingPassData(
     val notifications: List<InboxMessage>,
     val guidanceSteps: List<GuidanceStep>,
     val activeGroups: List<FriendGroup>,
-    val threatScore: Int = 0
+    val threatScore: Int = 0,
+    val passengerToken: String? = null
 )
 
 fun defaultSteps() = listOf(

@@ -29,14 +29,22 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
+import org.eu.nl.syu.way2fly.model.BoardingPassData
 import org.eu.nl.syu.way2fly.model.HelpRequest
+import org.eu.nl.syu.way2fly.network.BackendApiException
+import org.eu.nl.syu.way2fly.network.Way2LandApiClient
 
 @Composable
-fun MapScreen() {
+fun MapScreen(data: BoardingPassData) {
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
     var selectedFloor by remember { mutableIntStateOf(1) } // Default to First Floor
     var showFriends by remember { mutableStateOf(false) }
+    var backendStatus by remember { mutableStateOf<String?>(null) }
+    var backendError by remember { mutableStateOf<String?>(null) }
+    var isLoadingBackend by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -54,6 +62,147 @@ fun MapScreen() {
                         Icon(Icons.Default.Map, null, tint = Color.White, modifier = Modifier.size(20.dp))
                     }
                 }
+            }
+
+            val phoneNumber = data.phoneNumber
+
+            if (phoneNumber != null) {
+                ElevatedCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 12.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("Orange Playground", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text(
+                            "Phone $phoneNumber must be registered in the Orange admin sandbox before location lookups succeed.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Button(
+                                onClick = {
+                                    isLoadingBackend = true
+                                    backendError = null
+                                    backendStatus = null
+                                    scope.launch {
+                                        try {
+                                            Way2LandApiClient.registerDevice(phoneNumber)
+                                            backendStatus = "Device registration requested for $phoneNumber"
+                                        } catch (exception: BackendApiException) {
+                                            backendError = "Register failed (${exception.statusCode}): ${exception.message}"
+                                        } catch (exception: Exception) {
+                                            backendError = exception.message ?: "Device registration failed"
+                                        } finally {
+                                            isLoadingBackend = false
+                                        }
+                                    }
+                                },
+                                enabled = !isLoadingBackend,
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                            ) {
+                                Text("Register device")
+                            }
+
+                            OutlinedButton(
+                                onClick = {
+                                    isLoadingBackend = true
+                                    backendError = null
+                                    backendStatus = null
+                                    scope.launch {
+                                        try {
+                                            val location = Way2LandApiClient.retrieveLocation(phoneNumber)
+                                            backendStatus = "Location ${location.area.center.latitude}, ${location.area.center.longitude} • ${location.area.radius.toInt()}m • ${location.area.areaType}"
+                                        } catch (exception: BackendApiException) {
+                                            backendError = "Location lookup failed (${exception.statusCode}): ${exception.message}"
+                                        } catch (exception: Exception) {
+                                            backendError = exception.message ?: "Location lookup failed"
+                                        } finally {
+                                            isLoadingBackend = false
+                                        }
+                                    }
+                                },
+                                enabled = !isLoadingBackend
+                            ) {
+                                Text("Lookup location")
+                            }
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                isLoadingBackend = true
+                                backendError = null
+                                backendStatus = null
+                                scope.launch {
+                                    try {
+                                        val reachability = Way2LandApiClient.retrieveDeviceReachability(phoneNumber)
+                                        backendStatus = "Reachability ${reachability.reachabilityStatus} at ${reachability.lastStatusTime}"
+                                    } catch (exception: BackendApiException) {
+                                        backendError = "Reachability failed (${exception.statusCode}): ${exception.message}"
+                                    } catch (exception: Exception) {
+                                        backendError = exception.message ?: "Reachability failed"
+                                    } finally {
+                                        isLoadingBackend = false
+                                    }
+                                }
+                            },
+                            enabled = !isLoadingBackend,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(if (isLoadingBackend) "Working..." else "Check reachability")
+                        }
+
+                        Button(
+                            onClick = {
+                                val token = data.passengerToken
+                                if (token == null) {
+                                    backendError = "Authenticate first to sync passenger location"
+                                    return@Button
+                                }
+
+                                isLoadingBackend = true
+                                backendError = null
+                                backendStatus = null
+                                scope.launch {
+                                    try {
+                                        val latitude = if (selectedFloor == 0) 50.735851 else 50.736851
+                                        val longitude = if (selectedFloor == 0) 7.10066 else 7.10166
+                                        val status = Way2LandApiClient.updateUserLocation(token, latitude, longitude, selectedFloor)
+                                        backendStatus = "Passenger location synced: $status"
+                                    } catch (exception: BackendApiException) {
+                                        backendError = "Location sync failed (${exception.statusCode}): ${exception.message}"
+                                    } catch (exception: Exception) {
+                                        backendError = exception.message ?: "Location sync failed"
+                                    } finally {
+                                        isLoadingBackend = false
+                                    }
+                                }
+                            },
+                            enabled = !isLoadingBackend,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Sync passenger location")
+                        }
+
+                        if (backendStatus != null) {
+                            Text(backendStatus!!, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+                        }
+
+                        if (backendError != null) {
+                            Text(backendError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            } else {
+                Text(
+                    "Authenticate with a phone number to unlock Orange location tools.",
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
 
             Box(

@@ -19,6 +19,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -26,9 +27,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import org.eu.nl.syu.way2fly.model.*
+import org.eu.nl.syu.way2fly.network.PassengerSessionStore
+import org.eu.nl.syu.way2fly.network.Way2LandApiClient
+import org.eu.nl.syu.way2fly.network.BackendApiException
 import org.eu.nl.syu.way2fly.ui.*
 import org.eu.nl.syu.way2fly.ui.theme.Way2FlyTheme
 import java.util.*
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -36,6 +41,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             Way2FlyTheme {
+                val context = LocalContext.current
+                val scope = rememberCoroutineScope()
                 val navController = rememberNavController()
                 var boardingPassData by remember { mutableStateOf<BoardingPassData?>(null) }
 
@@ -60,6 +67,27 @@ class MainActivity : ComponentActivity() {
                                     "You are 8 minutes away from Gate B12. Boarding starts in 20 minutes.",
                                     boardingPassData
                                 ) { boardingPassData = it }
+
+                                data.passengerToken?.let { token ->
+                                    scope.launch {
+                                        runCatching {
+                                            Way2LandApiClient.syncUserTags(
+                                                passengerToken = token,
+                                                tags = listOf(
+                                                    "PASSENGER",
+                                                    "FLIGHT_${data.carrier}_${data.flightNumber}",
+                                                    "PNR_${data.pnr}"
+                                                ),
+                                                replace = false
+                                            )
+                                        }
+
+                                        runCatching { Way2LandApiClient.getUserNotifications(token) }
+                                            .onSuccess { backendMessages ->
+                                                boardingPassData = boardingPassData?.copy(notifications = backendMessages + (boardingPassData?.notifications.orEmpty()))
+                                            }
+                                    }
+                                }
                             }
                         )
                     }
@@ -83,14 +111,27 @@ class MainActivity : ComponentActivity() {
                                     boardingPassData = data.copy(activeGroups = data.activeGroups + newGroup)
                                 },
                                 onDeleteGroup = { id ->
-                                    boardingPassData = data.copy(activeGroups = data.activeGroups.filter { it.id != id })
+                                    val token = boardingPassData?.passengerToken
+                                    if (token == null) {
+                                        boardingPassData = data.copy(activeGroups = data.activeGroups.filter { it.id != id })
+                                    } else {
+                                        scope.launch {
+                                            runCatching { Way2LandApiClient.leaveGroup(token, id) }
+                                        }
+                                        boardingPassData = data.copy(activeGroups = data.activeGroups.filter { it.id != id })
+                                    }
                                 },
                                 onRenameGroup = { id, newName ->
                                     boardingPassData = data.copy(activeGroups = data.activeGroups.map { 
                                         if (it.id == id) it.copy(name = newName) else it 
                                     })
                                 },
+                                onJoinGroup = { groupId ->
+                                    val newGroup = FriendGroup(groupId, "Joined Group", 1, "0m")
+                                    boardingPassData = data.copy(activeGroups = data.activeGroups + newGroup)
+                                },
                                 onLogout = {
+                                    PassengerSessionStore.clear(context)
                                     boardingPassData = null
                                     navController.navigate("auth") { popUpTo(0) }
                                 }
@@ -129,6 +170,7 @@ fun PassengerMainScreen(
     onCreateGroup: (String) -> Unit,
     onDeleteGroup: (String) -> Unit,
     onRenameGroup: (String, String) -> Unit,
+    onJoinGroup: (String) -> Unit,
     onOpenDev: () -> Unit,
     onLogout: () -> Unit
 ) {
@@ -183,14 +225,16 @@ fun PassengerMainScreen(
                 label = "tab_switch"
             ) { targetTab ->
                 when (targetTab) {
-                    0 -> MapScreen()
-                    1 -> GuidanceScreen(data.guidanceSteps, onStepToggled)
+                    0 -> MapScreen(data)
+                    1 -> GuidanceScreen(data, onStepToggled)
                     2 -> InboxScreen(data.notifications, onStepToggled, onDeleteNotification)
                     3 -> GroupsScreen(
+                        data = data,
                         groups = data.activeGroups,
                         onCreateGroup = onCreateGroup,
                         onDeleteGroup = onDeleteGroup,
-                        onRenameGroup = onRenameGroup
+                        onRenameGroup = onRenameGroup,
+                        onJoinGroup = onJoinGroup
                     )
                     4 -> DetailsScreen(data, onLogout)
                 }

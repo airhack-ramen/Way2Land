@@ -15,6 +15,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -32,6 +33,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview as ComposePreview
@@ -41,9 +43,14 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.common.InputImage
+import androidx.compose.ui.platform.LocalContext
 import org.eu.nl.syu.way2fly.model.BoardingPassData
+import org.eu.nl.syu.way2fly.network.BackendApiException
+import org.eu.nl.syu.way2fly.network.PassengerSessionStore
+import org.eu.nl.syu.way2fly.network.Way2LandApiClient
 import org.eu.nl.syu.way2fly.ui.theme.Way2FlyTheme
 import org.eu.nl.syu.way2fly.util.BCBPParser
+import kotlinx.coroutines.launch
 
 @Composable
 fun AuthScreen(
@@ -84,9 +91,17 @@ fun AuthScreen(
 
 @Composable
 fun PassengerAuthCard(onAuthenticated: (BoardingPassData) -> Unit) {
+    val context = LocalContext.current
     var phoneNumber by remember { mutableStateOf("") }
     var scannedData by remember { mutableStateOf<BoardingPassData?>(null) }
     var scanError by remember { mutableStateOf<String?>(null) }
+    var authError by remember { mutableStateOf<String?>(null) }
+    var isAuthenticating by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    fun isValidE164PhoneNumber(value: String): Boolean {
+        return value.matches(Regex("^\\+[1-9]\\d{1,14}$"))
+    }
 
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
@@ -139,29 +154,79 @@ fun PassengerAuthCard(onAuthenticated: (BoardingPassData) -> Unit) {
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 singleLine = true,
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Phone)
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
             )
 
             Spacer(modifier = Modifier.height(24.dp))
             
-            val isPhoneValid = phoneNumber == "0" || (phoneNumber.length >= 10 && phoneNumber.all { it.isDigit() })
+            val normalizedPhoneNumber = phoneNumber.trim()
+            val isPhoneValid = isValidE164PhoneNumber(normalizedPhoneNumber)
 
             Button(
-                onClick = { scannedData?.let { onAuthenticated(it.copy(phoneNumber = phoneNumber)) } },
-                enabled = scannedData != null && isPhoneValid,
+                onClick = {
+                    val scannedPass = scannedData
+                    if (scannedPass == null) {
+                        authError = "Scan a boarding pass first"
+                        return@Button
+                    }
+
+                    if (!isPhoneValid) {
+                        authError = "Enter an E.164 phone number, for example +33612345678"
+                        return@Button
+                    }
+
+                    authError = null
+                    isAuthenticating = true
+                    scope.launch {
+                        try {
+                            val tokenResponse = Way2LandApiClient.exchangePassengerToken(
+                                phoneNumber = normalizedPhoneNumber,
+                                pnr = scannedPass.pnr
+                            )
+
+                            onAuthenticated(
+                                scannedPass.copy(
+                                    phoneNumber = normalizedPhoneNumber,
+                                    passengerToken = tokenResponse.passengerToken
+                                )
+                            )
+                            PassengerSessionStore.save(context, normalizedPhoneNumber, tokenResponse.passengerToken)
+                        } catch (exception: BackendApiException) {
+                            authError = "Backend auth failed (${exception.statusCode}): ${exception.message}"
+                        } catch (exception: Exception) {
+                            authError = exception.message ?: "Authentication failed"
+                        } finally {
+                            isAuthenticating = false
+                        }
+                    }
+                },
+                enabled = scannedData != null && isPhoneValid && !isAuthenticating,
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary, contentColor = Color.White)
             ) {
-                Text("ENTER APP", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    if (isAuthenticating) "CONNECTING..." else "ENTER APP",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
             }
             
             if (phoneNumber.isNotEmpty() && !isPhoneValid) {
                 Text(
-                    "Invalid phone (Enter 10 digits or '0')",
+                    "Invalid phone (use E.164 format, such as +33612345678)",
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.labelSmall,
                     modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+
+            if (authError != null) {
+                Text(
+                    authError!!,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(top = 8.dp)
                 )
             }
         }

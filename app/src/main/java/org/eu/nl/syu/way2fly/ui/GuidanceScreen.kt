@@ -12,20 +12,34 @@ import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Stars
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
+import org.eu.nl.syu.way2fly.model.BoardingPassData
 import org.eu.nl.syu.way2fly.model.GuidanceStep
+import org.eu.nl.syu.way2fly.network.BackendApiException
+import org.eu.nl.syu.way2fly.network.Way2LandApiClient
 
 @Composable
 fun GuidanceScreen(
-    steps: List<GuidanceStep>,
+    data: BoardingPassData,
     onStepToggled: (Int) -> Unit
 ) {
+    val steps = data.guidanceSteps
     val completedCount = steps.count { it.isCompleted }
     val progress = if (steps.isNotEmpty()) completedCount.toFloat() / steps.size else 0f
+    var routeStatus by remember { mutableStateOf<String?>(null) }
+    var routeError by remember { mutableStateOf<String?>(null) }
+    var strollStatus by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
 
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -41,6 +55,87 @@ fun GuidanceScreen(
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(Icons.Default.List, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    }
+                }
+            }
+
+            ElevatedCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Backend Routes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Route planning now comes from the backend, using the passenger session token instead of local-only advice.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Button(
+                            onClick = {
+                                val token = data.passengerToken
+                                if (token == null) {
+                                    routeError = "Authenticate first to load destination routes"
+                                    return@Button
+                                }
+
+                                routeError = null
+                                routeStatus = null
+                                scope.launch {
+                                    try {
+                                        val route = Way2LandApiClient.getRouteToDestination(token)
+                                        routeStatus = "${route.estimatedMinutes} min • ${route.remainingCheckpoints.joinToString()}"
+                                    } catch (exception: BackendApiException) {
+                                        routeError = "Destination route failed (${exception.statusCode}): ${exception.message}"
+                                    } catch (exception: Exception) {
+                                        routeError = exception.message ?: "Destination route failed"
+                                    }
+                                }
+                            }
+                        ) {
+                            Text("Load destination route")
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                val token = data.passengerToken
+                                if (token == null) {
+                                    routeError = "Authenticate first to load stroll routes"
+                                    return@OutlinedButton
+                                }
+
+                                routeError = null
+                                strollStatus = null
+                                scope.launch {
+                                    try {
+                                        val route = Way2LandApiClient.getRouteToStroll(token)
+                                        strollStatus = "Return by ${route.returnTime}"
+                                    } catch (exception: BackendApiException) {
+                                        routeError = "Stroll route failed (${exception.statusCode}): ${exception.message}"
+                                    } catch (exception: Exception) {
+                                        routeError = exception.message ?: "Stroll route failed"
+                                    }
+                                }
+                            }
+                        ) {
+                            Text("Load stroll route")
+                        }
+                    }
+
+                    routeStatus?.let { status ->
+                        Text(status, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+                    }
+
+                    strollStatus?.let { status ->
+                        Text(status, color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.bodySmall)
+                    }
+
+                    routeError?.let { error ->
+                        Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
