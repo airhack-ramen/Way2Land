@@ -159,30 +159,32 @@ fun PassengerMainScreen(
     var selectedTab by remember { mutableIntStateOf(0) }
 
     Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("Way2Fly", fontWeight = FontWeight.Bold, color = Color.White) },
-                actions = {
-                    IconButton(onClick = onLogout) {
-                        Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Switch Account", tint = Color.White)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primary)
-            )
-        },
         bottomBar = {
-            NavigationBar {
+            NavigationBar(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                tonalElevation = 0.dp
+            ) {
                 NavigationBarItem(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
                     icon = { Icon(Icons.Default.Map, null) },
-                    label = { Text("Map") }
+                    label = { Text("Map") },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                        selectedTextColor = MaterialTheme.colorScheme.primary,
+                        indicatorColor = MaterialTheme.colorScheme.primaryContainer
+                    )
                 )
                 NavigationBarItem(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
                     icon = { Icon(Icons.AutoMirrored.Filled.List, null) },
-                    label = { Text("Steps") }
+                    label = { Text("Steps") },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                        selectedTextColor = MaterialTheme.colorScheme.primary,
+                        indicatorColor = MaterialTheme.colorScheme.primaryContainer
+                    )
                 )
                 NavigationBarItem(
                     selected = selectedTab == 2,
@@ -192,13 +194,23 @@ fun PassengerMainScreen(
                             Icon(Icons.Default.Inbox, null)
                         }
                     },
-                    label = { Text("Inbox") }
+                    label = { Text("Inbox") },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                        selectedTextColor = MaterialTheme.colorScheme.primary,
+                        indicatorColor = MaterialTheme.colorScheme.primaryContainer
+                    )
                 )
                 NavigationBarItem(
                     selected = selectedTab == 3,
                     onClick = { selectedTab = 3 },
                     icon = { Icon(Icons.Default.Description, null) },
-                    label = { Text("Data") }
+                    label = { Text("Data") },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                        selectedTextColor = MaterialTheme.colorScheme.primary,
+                        indicatorColor = MaterialTheme.colorScheme.primaryContainer
+                    )
                 )
             }
         }
@@ -207,11 +219,20 @@ fun PassengerMainScreen(
             when (selectedTab) {
                 0 -> MapScreen()
                 1 -> GuidanceScreen(data.guidanceSteps, onStepToggled)
-                2 -> InboxScreen(data.notifications)
+                2 -> InboxScreen(data.notifications, onStepToggled)
                 3 -> {
                     Column {
-                        IconButton(onClick = onOpenDev, modifier = Modifier.align(Alignment.End)) {
-                            Icon(Icons.Default.Settings, null)
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(8.dp),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(onClick = onOpenDev) {
+                                Icon(Icons.Default.Settings, null, tint = MaterialTheme.colorScheme.primary)
+                            }
+                            IconButton(onClick = onLogout) {
+                                Icon(Icons.AutoMirrored.Filled.Logout, null, tint = MaterialTheme.colorScheme.error)
+                            }
                         }
                         DetailsScreen(data)
                     }

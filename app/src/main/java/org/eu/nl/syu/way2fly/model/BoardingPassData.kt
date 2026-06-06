@@ -26,5 +26,7 @@ data class InboxMessage(
     val id: String,
     val title: String,
     val body: String,
-    val timestamp: Long
+    val timestamp: Long,
+    val actionLabel: String? = null,
+    val stepToComplete: Int? = null
 )

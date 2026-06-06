@@ -21,7 +21,10 @@ import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun InboxScreen(messages: List<InboxMessage>) {
+fun InboxScreen(
+    messages: List<InboxMessage>,
+    onStepToggled: (Int) -> Unit = {}
+) {
     var selectedMessage by remember { mutableStateOf<InboxMessage?>(null) }
     val sheetState = rememberModalBottomSheetState()
     var showBottomSheet by remember { mutableStateOf(false) }
@@ -72,9 +75,16 @@ fun InboxScreen(messages: List<InboxMessage>) {
             containerColor = MaterialTheme.colorScheme.surface,
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
         ) {
-            NotificationDetailView(message = selectedMessage!!) {
-                showBottomSheet = false
-            }
+            NotificationDetailView(
+                message = selectedMessage!!,
+                onAction = { stepIndex ->
+                    onStepToggled(stepIndex)
+                    showBottomSheet = false
+                },
+                onClose = {
+                    showBottomSheet = false
+                }
+            )
         }
     }
 }
@@ -116,12 +126,26 @@ fun InboxCard(message: InboxMessage, onClick: () -> Unit) {
                 maxLines = 2,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
+            
+            if (message.actionLabel != null) {
+                Text(
+                    text = "Action Required: ${message.actionLabel}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.secondary,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
         }
     }
 }
 
 @Composable
-fun NotificationDetailView(message: InboxMessage, onClose: () -> Unit) {
+fun NotificationDetailView(
+    message: InboxMessage,
+    onAction: (Int) -> Unit,
+    onClose: () -> Unit
+) {
     val sdf = remember { SimpleDateFormat("EEEE, d MMMM yyyy, HH:mm", Locale.getDefault()) }
     val fullTimeString = sdf.format(Date(message.timestamp))
 
@@ -155,7 +179,19 @@ fun NotificationDetailView(message: InboxMessage, onClose: () -> Unit) {
         
         Spacer(modifier = Modifier.height(40.dp))
         
-        Button(
+        if (message.actionLabel != null && message.stepToComplete != null) {
+            Button(
+                onClick = { onAction(message.stepToComplete) },
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+            ) {
+                Text(message.actionLabel.uppercase(), fontWeight = FontWeight.Bold)
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+        
+        OutlinedButton(
             onClick = onClose,
             modifier = Modifier.fillMaxWidth().height(56.dp),
             shape = RoundedCornerShape(12.dp)
