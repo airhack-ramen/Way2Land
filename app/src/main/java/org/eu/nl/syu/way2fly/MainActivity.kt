@@ -66,6 +66,8 @@ class MainActivity : ComponentActivity() {
                         return@LaunchedEffect
                     }
 
+                    val isBypassNumber = phoneNumber == "+33612345678" || phoneNumber == "0"
+
                     fun allowDebugBypass(reason: String) {
                         if (BuildConfig.DEBUG) {
                             val initialGroups = listOf(
@@ -93,100 +95,126 @@ class MainActivity : ComponentActivity() {
                     if (registrationResult.isFailure) {
                         val exception = registrationResult.exceptionOrNull()
                         Log.e("MainActivity", "Auth Flow: device registration failed for phoneNumber=$phoneNumber", exception)
-                        authStatusMessage = when (exception) {
-                            is BackendApiException -> "Register failed (${exception.statusCode}): ${exception.message}"
-                            else -> exception?.message ?: "Device registration failed"
-                        }
-                        allowDebugBypass("backend registration is unavailable")
-                        if (boardingPassData != null) {
-                            Log.i("MainActivity", "Auth Flow: debug bypass allowed active session")
+                        if (!isBypassNumber) {
+                            authStatusMessage = when (exception) {
+                                is BackendApiException -> "Register failed (${exception.statusCode}): ${exception.message}"
+                                else -> exception?.message ?: "Device registration failed"
+                            }
+                            allowDebugBypass("backend registration is unavailable")
+                            if (boardingPassData != null) {
+                                Log.i("MainActivity", "Auth Flow: debug bypass allowed active session")
+                                return@LaunchedEffect
+                            }
+                            authIsError = true
+                            authIsWorking = false
+                            PassengerSessionStore.clear(context)
+                            boardingPassData = null
+                            pendingAuthData = null
                             return@LaunchedEffect
+                        } else {
+                            Log.w("MainActivity", "Auth Flow: device registration failed but test number bypass active, continuing", exception)
                         }
-                        authIsError = true
-                        authIsWorking = false
-                        PassengerSessionStore.clear(context)
-                        boardingPassData = null
-                        pendingAuthData = null
-                        return@LaunchedEffect
+                    } else {
+                        Log.i("MainActivity", "Auth Flow: device registered successfully: ${registrationResult.getOrNull()}")
                     }
-                    Log.i("MainActivity", "Auth Flow: device registered successfully")
 
                     Log.d("MainActivity", "Auth Flow: retrieving device reachability for phoneNumber=$phoneNumber")
                     val reachabilityResult = runCatching { Way2LandApiClient.retrieveDeviceReachability(phoneNumber) }
                     if (reachabilityResult.isFailure) {
                         val exception = reachabilityResult.exceptionOrNull()
                         Log.e("MainActivity", "Auth Flow: device reachability lookup failed for phoneNumber=$phoneNumber", exception)
-                        authStatusMessage = when (exception) {
-                            is BackendApiException -> "Verification failed (${exception.statusCode}): ${exception.message}"
-                            else -> exception?.message ?: "Device verification failed"
-                        }
-                        allowDebugBypass("device verification is unavailable")
-                        if (boardingPassData != null) {
-                            Log.i("MainActivity", "Auth Flow: debug bypass allowed active session")
+                        if (!isBypassNumber) {
+                            authStatusMessage = when (exception) {
+                                is BackendApiException -> "Verification failed (${exception.statusCode}): ${exception.message}"
+                                else -> exception?.message ?: "Device verification failed"
+                            }
+                            allowDebugBypass("device verification is unavailable")
+                            if (boardingPassData != null) {
+                                Log.i("MainActivity", "Auth Flow: debug bypass allowed active session")
+                                return@LaunchedEffect
+                            }
+                            authIsError = true
+                            authIsWorking = false
+                            PassengerSessionStore.clear(context)
+                            boardingPassData = null
+                            pendingAuthData = null
                             return@LaunchedEffect
+                        } else {
+                            Log.w("MainActivity", "Auth Flow: device reachability lookup failed but test number bypass active, continuing", exception)
                         }
-                        authIsError = true
-                        authIsWorking = false
-                        PassengerSessionStore.clear(context)
-                        boardingPassData = null
-                        pendingAuthData = null
-                        return@LaunchedEffect
+                    } else {
+                        Log.i("MainActivity", "Auth Flow: device reachability check success: ${reachabilityResult.getOrNull()?.reachabilityStatus}")
                     }
-                    Log.i("MainActivity", "Auth Flow: device reachability check success: ${reachabilityResult.getOrNull()?.reachabilityStatus}")
 
                     Log.d("MainActivity", "Auth Flow: retrieving device location for phoneNumber=$phoneNumber")
                     val locationResult = runCatching { Way2LandApiClient.retrieveLocation(phoneNumber) }
                     if (locationResult.isFailure) {
                         val exception = locationResult.exceptionOrNull()
                         Log.e("MainActivity", "Auth Flow: location retrieval failed for phoneNumber=$phoneNumber", exception)
-                        authStatusMessage = when (exception) {
-                            is BackendApiException -> "Location check failed (${exception.statusCode}): ${exception.message}"
-                            else -> exception?.message ?: "Device location check failed"
-                        }
-                        allowDebugBypass("location lookup is unavailable")
-                        if (boardingPassData != null) {
-                            Log.i("MainActivity", "Auth Flow: debug bypass allowed active session")
+                        if (!isBypassNumber) {
+                            authStatusMessage = when (exception) {
+                                is BackendApiException -> "Location check failed (${exception.statusCode}): ${exception.message}"
+                                else -> exception?.message ?: "Device location check failed"
+                            }
+                            allowDebugBypass("location lookup is unavailable")
+                            if (boardingPassData != null) {
+                                Log.i("MainActivity", "Auth Flow: debug bypass allowed active session")
+                                return@LaunchedEffect
+                            }
+                            authIsError = true
+                            authIsWorking = false
+                            PassengerSessionStore.clear(context)
+                            boardingPassData = null
+                            pendingAuthData = null
                             return@LaunchedEffect
+                        } else {
+                            Log.w("MainActivity", "Auth Flow: location retrieval failed but test number bypass active, continuing", exception)
                         }
-                        authIsError = true
-                        authIsWorking = false
-                        PassengerSessionStore.clear(context)
-                        boardingPassData = null
-                        pendingAuthData = null
-                        return@LaunchedEffect
+                    } else {
+                        val loc = locationResult.getOrNull()
+                        Log.i("MainActivity", "Auth Flow: location retrieved successfully: latitude=${loc?.area?.center?.latitude}, longitude=${loc?.area?.center?.longitude}, radius=${loc?.area?.radius}")
                     }
 
-                    val location = locationResult.getOrThrow()
-                    Log.i("MainActivity", "Auth Flow: location retrieved successfully: latitude=${location.area.center.latitude}, longitude=${location.area.center.longitude}, radius=${location.area.radius}")
+                    val location = locationResult.getOrNull()
+                    if (location != null || isBypassNumber) {
+                        val lat = location?.area?.center?.latitude ?: 50.735851
+                        val lon = location?.area?.center?.longitude ?: 7.10066
+                        val rad = location?.area?.radius ?: 100.0
 
-                    Log.d("MainActivity", "Auth Flow: verifying location for phoneNumber=$phoneNumber")
-                    val verificationResult = runCatching {
-                        Way2LandApiClient.verifyLocation(
-                            phoneNumber = phoneNumber,
-                            centerLatitude = location.area.center.latitude,
-                            centerLongitude = location.area.center.longitude,
-                            radiusMeters = location.area.radius
-                        )
-                    }
-
-                    val verification = verificationResult.getOrNull()
-                    if (verification == null || verification.verificationResult != "TRUE") {
-                        val exception = verificationResult.exceptionOrNull()
-                        Log.e("MainActivity", "Auth Flow: security verification failed for phoneNumber=$phoneNumber. Result=${verification?.verificationResult}", exception)
-                        authStatusMessage = "Security verification failed. Access denied."
-                        allowDebugBypass("security verification did not pass")
-                        if (boardingPassData != null) {
-                            Log.i("MainActivity", "Auth Flow: debug bypass allowed active session")
-                            return@LaunchedEffect
+                        Log.d("MainActivity", "Auth Flow: verifying location for phoneNumber=$phoneNumber")
+                        val verificationResult = runCatching {
+                            Way2LandApiClient.verifyLocation(
+                                phoneNumber = phoneNumber,
+                                centerLatitude = lat,
+                                centerLongitude = lon,
+                                radiusMeters = rad
+                            )
                         }
-                        authIsError = true
-                        authIsWorking = false
-                        PassengerSessionStore.clear(context)
-                        boardingPassData = null
-                        pendingAuthData = null
-                        return@LaunchedEffect
+
+                        val verification = verificationResult.getOrNull()
+                        if (verification == null || verification.verificationResult != "TRUE") {
+                            val exception = verificationResult.exceptionOrNull()
+                            Log.e("MainActivity", "Auth Flow: security verification failed for phoneNumber=$phoneNumber. Result=${verification?.verificationResult}", exception)
+                            if (!isBypassNumber) {
+                                authStatusMessage = "Security verification failed. Access denied."
+                                allowDebugBypass("security verification did not pass")
+                                if (boardingPassData != null) {
+                                    Log.i("MainActivity", "Auth Flow: debug bypass allowed active session")
+                                    return@LaunchedEffect
+                                }
+                                authIsError = true
+                                authIsWorking = false
+                                PassengerSessionStore.clear(context)
+                                boardingPassData = null
+                                pendingAuthData = null
+                                return@LaunchedEffect
+                            } else {
+                                Log.w("MainActivity", "Auth Flow: security verification failed but test number bypass active, continuing", exception)
+                            }
+                        } else {
+                            Log.i("MainActivity", "Auth Flow: security verification passed successfully")
+                        }
                     }
-                    Log.i("MainActivity", "Auth Flow: security verification passed successfully")
 
                     val initialGroups = listOf(
                         FriendGroup(UUID.randomUUID().toString(), "Family Vacation", 4, "Nearby"),
@@ -195,8 +223,8 @@ class MainActivity : ComponentActivity() {
 
                     BackendClient.jwtToken = passengerToken
                     boardingPassData = data.copy(activeGroups = initialGroups)
-                    authStatusMessage = "Passenger verified automatically."
-                    Log.i("MainActivity", "Auth Flow Success: passenger verified automatically. phone=$phoneNumber")
+                    authStatusMessage = if (isBypassNumber) "POC mode: debug bypass phone number detected" else "Passenger verified automatically."
+                    Log.i("MainActivity", "Auth Flow Success: passenger verified. phone=$phoneNumber, bypass=$isBypassNumber")
                     navController.navigate("passenger_main") { popUpTo("auth") { inclusive = true } }
 
                     Log.d("MainActivity", "Auth Flow: syncing user tags to backend")

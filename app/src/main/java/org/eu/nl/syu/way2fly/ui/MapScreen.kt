@@ -2,6 +2,7 @@ package org.eu.nl.syu.way2fly.ui
 
 import androidx.compose.animation.animateColor
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -21,6 +22,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -204,6 +206,8 @@ fun MapScreen(data: BoardingPassData) {
                         DetailedFirstFloorLayout()
                     }
 
+                    RouteLayer(data, selectedFloor)
+
                     if (showFriends) {
                         FriendLayer(selectedFloor)
                     }
@@ -261,6 +265,168 @@ fun FriendLayer(floor: Int) {
         FriendMarker("ES", Color(0xFFFF9800), IntOffset(900, 300)) // Business Lounge area
     } else {
         FriendMarker("AD", Color(0xFF4CAF50), IntOffset(200, 500)) // Check-in area
+    }
+}
+
+@Composable
+fun RouteLayer(data: BoardingPassData, selectedFloor: Int) {
+    val steps = data.guidanceSteps
+    val isCheckinCompleted = steps.find { it.title.contains("Check-in", ignoreCase = true) }?.isCompleted ?: false
+    val isSecurityCompleted = steps.find { it.title.contains("Security", ignoreCase = true) }?.isCompleted ?: false
+    val isPassportCompleted = steps.find { it.title.contains("Passport", ignoreCase = true) }?.isCompleted ?: false
+    val isBoardingCompleted = steps.find { it.title.contains("Boarding", ignoreCase = true) }?.isCompleted ?: false
+
+    if (selectedFloor == 0) {
+        val checkinPx = Offset(212.5f, 487.5f)
+        val securityPx = Offset(487.5f, 487.5f)
+
+        Box(modifier = Modifier.size(1000.dp)) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val lineColor = if (isCheckinCompleted) Color(0xFF4CAF50) else Color(0xFFFF9800)
+                val pathEffect = if (isCheckinCompleted) null else PathEffect.dashPathEffect(floatArrayOf(15f, 15f), 0f)
+
+                drawLine(
+                    color = lineColor,
+                    start = checkinPx,
+                    end = securityPx,
+                    strokeWidth = 6f,
+                    pathEffect = pathEffect
+                )
+
+                drawCircle(
+                    color = if (isCheckinCompleted) Color(0xFF4CAF50) else Color(0xFF2196F3),
+                    radius = 12f,
+                    center = checkinPx
+                )
+                drawCircle(
+                    color = Color.White,
+                    radius = 6f,
+                    center = checkinPx
+                )
+
+                drawCircle(
+                    color = if (isSecurityCompleted) Color(0xFF4CAF50) else Color(0xFF9E9E9E),
+                    radius = 12f,
+                    center = securityPx
+                )
+                drawCircle(
+                    color = Color.White,
+                    radius = 6f,
+                    center = securityPx
+                )
+            }
+
+            val currentStepIndex = steps.indexOfFirst { !it.isCompleted }
+            val activeStep = if (currentStepIndex != -1) steps[currentStepIndex] else null
+
+            if (activeStep != null) {
+                val isAtCheckin = activeStep.title.contains("Check-in", ignoreCase = true)
+                val isAtSecurity = activeStep.title.contains("Security", ignoreCase = true)
+
+                if (isAtCheckin) {
+                    MeMarker(offset = IntOffset(212 - 18, 487 - 18))
+                } else if (isAtSecurity) {
+                    MeMarker(offset = IntOffset(487 - 18, 487 - 18))
+                }
+            } else {
+                MeMarker(offset = IntOffset(487 - 18, 487 - 18))
+            }
+        }
+    } else if (selectedFloor == 1) {
+        val passportPx = Offset(170f, 135f)
+        val boardingPx = Offset(550f, 900f)
+
+        Box(modifier = Modifier.size(1600.dp, 1100.dp)) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val lineColor = if (isPassportCompleted) Color(0xFF4CAF50) else Color(0xFFFF9800)
+                val pathEffect = if (isPassportCompleted) null else PathEffect.dashPathEffect(floatArrayOf(15f, 15f), 0f)
+
+                drawLine(
+                    color = lineColor,
+                    start = passportPx,
+                    end = boardingPx,
+                    strokeWidth = 6f,
+                    pathEffect = pathEffect
+                )
+
+                drawCircle(
+                    color = if (isPassportCompleted) Color(0xFF4CAF50) else Color(0xFF2196F3),
+                    radius = 12f,
+                    center = passportPx
+                )
+                drawCircle(
+                    color = Color.White,
+                    radius = 6f,
+                    center = passportPx
+                )
+
+                drawCircle(
+                    color = if (isBoardingCompleted) Color(0xFF4CAF50) else Color(0xFF9E9E9E),
+                    radius = 12f,
+                    center = boardingPx
+                )
+                drawCircle(
+                    color = Color.White,
+                    radius = 6f,
+                    center = boardingPx
+                )
+            }
+
+            val currentStepIndex = steps.indexOfFirst { !it.isCompleted }
+            val activeStep = if (currentStepIndex != -1) steps[currentStepIndex] else null
+
+            if (activeStep != null) {
+                val isAtPassport = activeStep.title.contains("Passport", ignoreCase = true)
+                val isAtBoarding = activeStep.title.contains("Boarding", ignoreCase = true)
+
+                if (isAtPassport) {
+                    MeMarker(offset = IntOffset(170 - 18, 135 - 18))
+                } else if (isAtBoarding) {
+                    MeMarker(offset = IntOffset(550 - 18, 900 - 18))
+                }
+            } else {
+                MeMarker(offset = IntOffset(550 - 18, 900 - 18))
+            }
+        }
+    }
+}
+
+@Composable
+fun MeMarker(offset: IntOffset) {
+    val infiniteTransition = rememberInfiniteTransition(label = "mePulse")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.3f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse"
+    )
+
+    Box(
+        modifier = Modifier
+            .offset { offset }
+            .size(36.dp)
+            .graphicsLayer(scaleX = pulseScale, scaleY = pulseScale),
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.primary,
+            shadowElevation = 6.dp,
+            border = BorderStroke(2.dp, Color.White)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text("ME", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Black)
+            }
+        }
+        Surface(
+            modifier = Modifier.size(46.dp),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+        ) {}
     }
 }
 

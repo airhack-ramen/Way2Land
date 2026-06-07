@@ -68,7 +68,7 @@ fun GuidanceScreen(
         }
     }
 
-    LaunchedEffect(data.passengerToken) {
+    LaunchedEffect(data.passengerToken, data.guidanceSteps) {
         val token = data.passengerToken ?: return@LaunchedEffect
         Log.i("GuidanceScreen", "Starting route loading for passengerToken")
         routeError = null

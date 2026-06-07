@@ -1,0 +1,109 @@
+<animated-vector
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt">
+
+    <aapt:attr name="android:drawable">
+        <vector
+            android:width="24dp"
+            android:height="24dp"
+            android:viewportWidth="960"
+            android:viewportHeight="960">
+            <path
+                android:name="path1"
+                android:pathData="m140,504 l20,116 320,220 320,-220 20,-116 -340,164z"
+                android:strokeLineJoin="round"
+                android:strokeWidth="19.06"
+                android:fillColor="#000000"
+                android:fillAlpha="0.2"
+                android:strokeColor="#00000000"/>
+            <path
+                android:name="path2"
+                android:pathData="m132,440 l8,40 340,188 340,-188 8,-40 -348,228z"
+                android:strokeLineJoin="round"
+                android:strokeWidth="13.3158"
+                android:fillColor="#000000"
+                android:fillAlpha="0.2"
+                android:strokeColor="#00000000"/>
+            <path
+                android:name="path3"
+                android:pathData="m140,332 l-12,76 352,260 352,-260 -12,-76 -340,336z"
+                android:strokeLineJoin="round"
+                android:strokeWidth="19.06"
+                android:fillColor="#000000"
+                android:fillAlpha="0.2"
+                android:strokeColor="#00000000"/>
+            <path
+                android:name="path4"
+                android:pathData="m240,260 l-68,44 308,364 308,-364 -68,-44 -240,408z"
+                android:strokeLineJoin="round"
+                android:strokeWidth="19.06"
+                android:fillColor="#000000"
+                android:fillAlpha="0.2"
+                android:strokeColor="#00000000"/>
+        </vector>
+    </aapt:attr>
+
+    <target android:name="path4">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:duration="1200"
+                android:repeatCount="infinite">
+                <propertyValuesHolder android:propertyName="fillAlpha">
+                    <keyframe android:fraction="0.0" android:value="0.2"/>
+                    <keyframe android:fraction="0.1" android:value="1.0"/>
+                    <keyframe android:fraction="0.2" android:value="0.2"/>
+                    <keyframe android:fraction="1.0" android:value="0.2"/>
+                </propertyValuesHolder>
+            </objectAnimator>
+        </aapt:attr>
+    </target>
+
+    <target android:name="path3">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:duration="1200"
+                android:repeatCount="infinite">
+                <propertyValuesHolder android:propertyName="fillAlpha">
+                    <keyframe android:fraction="0.0" android:value="0.2"/>
+                    <keyframe android:fraction="0.15" android:value="0.2"/>
+                    <keyframe android:fraction="0.25" android:value="1.0"/>
+                    <keyframe android:fraction="0.35" android:value="0.2"/>
+                    <keyframe android:fraction="1.0" android:value="0.2"/>
+                </propertyValuesHolder>
+            </objectAnimator>
+        </aapt:attr>
+    </target>
+
+    <target android:name="path2">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:duration="1200"
+                android:repeatCount="infinite">
+                <propertyValuesHolder android:propertyName="fillAlpha">
+                    <keyframe android:fraction="0.0" android:value="0.2"/>
+                    <keyframe android:fraction="0.3" android:value="0.2"/>
+                    <keyframe android:fraction="0.4" android:value="1.0"/>
+                    <keyframe android:fraction="0.5" android:value="0.2"/>
+                    <keyframe android:fraction="1.0" android:value="0.2"/>
+                </propertyValuesHolder>
+            </objectAnimator>
+        </aapt:attr>
+    </target>
+
+    <target android:name="path1">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:duration="1200"
+                android:repeatCount="infinite">
+                <propertyValuesHolder android:propertyName="fillAlpha">
+                    <keyframe android:fraction="0.0" android:value="0.2"/>
+                    <keyframe android:fraction="0.45" android:value="0.2"/>
+                    <keyframe android:fraction="0.55" android:value="1.0"/>
+                    <keyframe android:fraction="0.65" android:value="0.2"/>
+                    <keyframe android:fraction="1.0" android:value="0.2"/>
+                </propertyValuesHolder>
+            </objectAnimator>
+        </aapt:attr>
+    </target>
+
+</animated-vector>
