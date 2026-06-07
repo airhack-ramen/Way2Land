@@ -44,6 +44,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.common.InputImage
 import androidx.compose.ui.platform.LocalContext
+import org.eu.nl.syu.way2fly.BuildConfig
 import org.eu.nl.syu.way2fly.model.BoardingPassData
 import org.eu.nl.syu.way2fly.network.BackendApiException
 import org.eu.nl.syu.way2fly.network.PassengerSessionStore
@@ -54,7 +55,10 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun AuthScreen(
-    onPassengerAuthenticated: (BoardingPassData) -> Unit
+    onPassengerAuthenticated: (BoardingPassData) -> Unit,
+    statusMessage: String? = null,
+    statusIsError: Boolean = false,
+    statusIsWorking: Boolean = false
 ) {
     val scrollState = rememberScrollState()
 
@@ -77,6 +81,20 @@ fun AuthScreen(
             Spacer(modifier = Modifier.height(32.dp))
 
             PassengerAuthCard(onPassengerAuthenticated)
+
+            if (statusMessage != null) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    statusMessage,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (statusIsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            if (statusIsWorking) {
+                Spacer(modifier = Modifier.height(8.dp))
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
             
             Spacer(modifier = Modifier.height(32.dp))
             Text(
@@ -179,14 +197,16 @@ fun PassengerAuthCard(onAuthenticated: (BoardingPassData) -> Unit) {
                     isAuthenticating = true
                     scope.launch {
                         try {
+                            val effectivePnr = if (BuildConfig.DEBUG) "ABCDEF" else scannedPass.pnr
                             val tokenResponse = Way2LandApiClient.exchangePassengerToken(
                                 phoneNumber = normalizedPhoneNumber,
-                                pnr = scannedPass.pnr
+                                pnr = effectivePnr
                             )
 
                             onAuthenticated(
                                 scannedPass.copy(
                                     phoneNumber = normalizedPhoneNumber,
+                                    pnr = effectivePnr,
                                     passengerToken = tokenResponse.passengerToken
                                 )
                             )

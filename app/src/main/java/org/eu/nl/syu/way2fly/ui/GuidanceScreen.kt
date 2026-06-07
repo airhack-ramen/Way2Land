@@ -12,10 +12,10 @@ import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Stars
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,6 +27,11 @@ import org.eu.nl.syu.way2fly.model.BoardingPassData
 import org.eu.nl.syu.way2fly.model.GuidanceStep
 import org.eu.nl.syu.way2fly.network.BackendApiException
 import org.eu.nl.syu.way2fly.network.Way2LandApiClient
+import java.time.Instant
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeParseException
 
 @Composable
 fun GuidanceScreen(
@@ -39,7 +44,72 @@ fun GuidanceScreen(
     var routeStatus by remember { mutableStateOf<String?>(null) }
     var routeError by remember { mutableStateOf<String?>(null) }
     var strollStatus by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
+    var strollError by remember { mutableStateOf<String?>(null) }
+    val localTimeFormatter = remember {
+        DateTimeFormatter.ofPattern("EEE, d MMM • h:mm a z")
+    }
+
+    fun isLoopRouteError(exception: Throwable): Boolean {
+        val backendException = exception as? BackendApiException ?: return false
+        return backendException.statusCode == 400 && backendException.message.contains("loops not allowed", ignoreCase = true)
+    }
+
+    fun formatBackendTime(rawTime: String): String? {
+        return try {
+            val zonedTime = try {
+                OffsetDateTime.parse(rawTime).toZonedDateTime()
+            } catch (_: DateTimeParseException) {
+                Instant.parse(rawTime).atZone(ZoneId.systemDefault())
+            }
+            zonedTime.withZoneSameInstant(ZoneId.systemDefault()).format(localTimeFormatter)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    LaunchedEffect(data.passengerToken) {
+        val token = data.passengerToken ?: return@LaunchedEffect
+        routeError = null
+        routeStatus = "Loading backend route..."
+        strollStatus = null
+        strollError = null
+
+        runCatching { Way2LandApiClient.getRouteToDestination(token) }
+            .onSuccess { route ->
+                routeStatus = "${route.estimatedMinutes} min • ${route.remainingCheckpoints.joinToString()}"
+            }
+            .onFailure { exception ->
+                routeError = when {
+                    isLoopRouteError(exception) -> null
+                    exception is BackendApiException -> "Destination route failed (${exception.statusCode}): ${exception.message}"
+                    else -> exception.message ?: "Destination route failed"
+                }
+                if (routeError != null) {
+                    routeStatus = null
+                }
+            }
+
+        runCatching { Way2LandApiClient.getRouteToStroll(token) }
+            .onSuccess { route ->
+                strollStatus = formatBackendTime(route.returnTime)?.let { "Return by $it" }
+                    ?: "Return by ${route.returnTime}"
+            }
+            .onFailure { exception ->
+                strollError = when (exception) {
+                    is BackendApiException -> {
+                        if (isLoopRouteError(exception)) {
+                            null
+                        } else {
+                            "Stroll route failed (${exception.statusCode}): ${exception.message}"
+                        }
+                    }
+                    else -> exception.message ?: "Stroll route failed"
+                }
+                if (strollError != null) {
+                    strollStatus = null
+                }
+            }
+    }
 
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -59,84 +129,57 @@ fun GuidanceScreen(
                 }
             }
 
-            ElevatedCard(
+            Column(
                 modifier = Modifier
+                    .padding(horizontal = 16.dp)
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Backend Routes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text(
-                        "Route planning now comes from the backend, using the passenger session token instead of local-only advice.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    .background(
+                        color = MaterialTheme.colorScheme.surface,
+                        shape = RoundedCornerShape(24.dp)
                     )
+                    .padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Stars, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.padding(8.dp))
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Route Snapshot", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text(
+                            "Pulled automatically from the backend and shown in local time.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Button(
-                            onClick = {
-                                val token = data.passengerToken
-                                if (token == null) {
-                                    routeError = "Authenticate first to load destination routes"
-                                    return@Button
-                                }
-
-                                routeError = null
-                                routeStatus = null
-                                scope.launch {
-                                    try {
-                                        val route = Way2LandApiClient.getRouteToDestination(token)
-                                        routeStatus = "${route.estimatedMinutes} min • ${route.remainingCheckpoints.joinToString()}"
-                                    } catch (exception: BackendApiException) {
-                                        routeError = "Destination route failed (${exception.statusCode}): ${exception.message}"
-                                    } catch (exception: Exception) {
-                                        routeError = exception.message ?: "Destination route failed"
-                                    }
-                                }
-                            }
-                        ) {
-                            Text("Load destination route")
+                if (routeStatus != null || strollStatus != null) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        routeStatus?.let { status ->
+                            AssistChip(
+                                onClick = {},
+                                label = { Text(status) }
+                            )
                         }
 
-                        OutlinedButton(
-                            onClick = {
-                                val token = data.passengerToken
-                                if (token == null) {
-                                    routeError = "Authenticate first to load stroll routes"
-                                    return@OutlinedButton
-                                }
-
-                                routeError = null
-                                strollStatus = null
-                                scope.launch {
-                                    try {
-                                        val route = Way2LandApiClient.getRouteToStroll(token)
-                                        strollStatus = "Return by ${route.returnTime}"
-                                    } catch (exception: BackendApiException) {
-                                        routeError = "Stroll route failed (${exception.statusCode}): ${exception.message}"
-                                    } catch (exception: Exception) {
-                                        routeError = exception.message ?: "Stroll route failed"
-                                    }
-                                }
-                            }
-                        ) {
-                            Text("Load stroll route")
+                        strollStatus?.let { status ->
+                            AssistChip(
+                                onClick = {},
+                                label = { Text(status) }
+                            )
                         }
                     }
+                }
 
-                    routeStatus?.let { status ->
-                        Text(status, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
-                    }
-
-                    strollStatus?.let { status ->
-                        Text(status, color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.bodySmall)
-                    }
-
-                    routeError?.let { error ->
-                        Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                    }
+                (routeError ?: strollError)?.let { error ->
+                    Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
             }
 

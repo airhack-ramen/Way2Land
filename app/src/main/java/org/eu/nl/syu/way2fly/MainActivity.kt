@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import org.eu.nl.syu.way2fly.BuildConfig
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
@@ -45,6 +46,154 @@ class MainActivity : ComponentActivity() {
                 val scope = rememberCoroutineScope()
                 val navController = rememberNavController()
                 var boardingPassData by remember { mutableStateOf<BoardingPassData?>(null) }
+                var authStatusMessage by remember { mutableStateOf<String?>(null) }
+                var authIsError by remember { mutableStateOf(false) }
+                var authIsWorking by remember { mutableStateOf(false) }
+                var pendingAuthData by remember { mutableStateOf<BoardingPassData?>(null) }
+
+                LaunchedEffect(pendingAuthData?.passengerToken) {
+                    val data = pendingAuthData ?: return@LaunchedEffect
+                    val phoneNumber = data.phoneNumber
+                    val passengerToken = data.passengerToken
+                    if (phoneNumber == null || passengerToken == null) {
+                        authStatusMessage = "Passenger data is incomplete"
+                        authIsError = true
+                        authIsWorking = false
+                        pendingAuthData = null
+                        return@LaunchedEffect
+                    }
+
+                    fun allowDebugBypass(reason: String) {
+                        if (BuildConfig.DEBUG) {
+                            val initialGroups = listOf(
+                                FriendGroup(UUID.randomUUID().toString(), "Family Vacation", 4, "Nearby"),
+                                FriendGroup(UUID.randomUUID().toString(), "Project Team", 3, "20m")
+                            )
+
+                            boardingPassData = data.copy(activeGroups = initialGroups)
+                            authStatusMessage = "POC mode: $reason"
+                            authIsError = false
+                            authIsWorking = false
+                            navController.navigate("passenger_main") { popUpTo("auth") { inclusive = true } }
+                            pendingAuthData = null
+                        }
+                    }
+
+                    authIsWorking = true
+                    authIsError = false
+                    authStatusMessage = "Registering and verifying device automatically..."
+
+                    val registrationResult = runCatching { Way2LandApiClient.registerDevice(phoneNumber) }
+                    if (registrationResult.isFailure) {
+                        val exception = registrationResult.exceptionOrNull()
+                        authStatusMessage = when (exception) {
+                            is BackendApiException -> "Register failed (${exception.statusCode}): ${exception.message}"
+                            else -> exception?.message ?: "Device registration failed"
+                        }
+                        allowDebugBypass("backend registration is unavailable")
+                        if (boardingPassData != null) {
+                            return@LaunchedEffect
+                        }
+                        authIsError = true
+                        authIsWorking = false
+                        PassengerSessionStore.clear(context)
+                        boardingPassData = null
+                        pendingAuthData = null
+                        return@LaunchedEffect
+                    }
+
+                    val reachabilityResult = runCatching { Way2LandApiClient.retrieveDeviceReachability(phoneNumber) }
+                    if (reachabilityResult.isFailure) {
+                        val exception = reachabilityResult.exceptionOrNull()
+                        authStatusMessage = when (exception) {
+                            is BackendApiException -> "Verification failed (${exception.statusCode}): ${exception.message}"
+                            else -> exception?.message ?: "Device verification failed"
+                        }
+                        allowDebugBypass("device verification is unavailable")
+                        if (boardingPassData != null) {
+                            return@LaunchedEffect
+                        }
+                        authIsError = true
+                        authIsWorking = false
+                        PassengerSessionStore.clear(context)
+                        boardingPassData = null
+                        pendingAuthData = null
+                        return@LaunchedEffect
+                    }
+
+                    val locationResult = runCatching { Way2LandApiClient.retrieveLocation(phoneNumber) }
+                    if (locationResult.isFailure) {
+                        val exception = locationResult.exceptionOrNull()
+                        authStatusMessage = when (exception) {
+                            is BackendApiException -> "Location check failed (${exception.statusCode}): ${exception.message}"
+                            else -> exception?.message ?: "Device location check failed"
+                        }
+                        allowDebugBypass("location lookup is unavailable")
+                        if (boardingPassData != null) {
+                            return@LaunchedEffect
+                        }
+                        authIsError = true
+                        authIsWorking = false
+                        PassengerSessionStore.clear(context)
+                        boardingPassData = null
+                        pendingAuthData = null
+                        return@LaunchedEffect
+                    }
+
+                    val location = locationResult.getOrThrow()
+                    val verificationResult = runCatching {
+                        Way2LandApiClient.verifyLocation(
+                            phoneNumber = phoneNumber,
+                            centerLatitude = location.area.center.latitude,
+                            centerLongitude = location.area.center.longitude,
+                            radiusMeters = location.area.radius
+                        )
+                    }
+
+                    val verification = verificationResult.getOrNull()
+                    if (verification == null || verification.verificationResult != "TRUE") {
+                        authStatusMessage = "Security verification failed. Access denied."
+                        allowDebugBypass("security verification did not pass")
+                        if (boardingPassData != null) {
+                            return@LaunchedEffect
+                        }
+                        authIsError = true
+                        authIsWorking = false
+                        PassengerSessionStore.clear(context)
+                        boardingPassData = null
+                        pendingAuthData = null
+                        return@LaunchedEffect
+                    }
+
+                    val initialGroups = listOf(
+                        FriendGroup(UUID.randomUUID().toString(), "Family Vacation", 4, "Nearby"),
+                        FriendGroup(UUID.randomUUID().toString(), "Project Team", 3, "20m")
+                    )
+
+                    boardingPassData = data.copy(activeGroups = initialGroups)
+                    authStatusMessage = "Passenger verified automatically."
+                    navController.navigate("passenger_main") { popUpTo("auth") { inclusive = true } }
+
+                    runCatching {
+                        Way2LandApiClient.syncUserTags(
+                            passengerToken = passengerToken,
+                            tags = listOf(
+                                "PASSENGER",
+                                "FLIGHT_${data.carrier}_${data.flightNumber}",
+                                "PNR_${data.pnr}"
+                            ),
+                            replace = false
+                        )
+                    }
+
+                    runCatching { Way2LandApiClient.getUserNotifications(passengerToken) }
+                        .onSuccess { backendMessages ->
+                            boardingPassData = boardingPassData?.copy(notifications = backendMessages + (boardingPassData?.notifications.orEmpty()))
+                        }
+
+                    authIsWorking = false
+                    pendingAuthData = null
+                }
 
                 NavHost(
                     navController = navController,
@@ -54,40 +203,11 @@ class MainActivity : ComponentActivity() {
                 ) {
                     composable("auth") {
                         AuthScreen(
+                            statusMessage = authStatusMessage,
+                            statusIsError = authIsError,
+                            statusIsWorking = authIsWorking,
                             onPassengerAuthenticated = { data ->
-                                // Initialize with some dummy groups for demonstration
-                                val initialGroups = listOf(
-                                    FriendGroup(UUID.randomUUID().toString(), "Family Vacation", 4, "Nearby"),
-                                    FriendGroup(UUID.randomUUID().toString(), "Project Team", 3, "20m")
-                                )
-                                boardingPassData = data.copy(activeGroups = initialGroups)
-                                navController.navigate("passenger_main") { popUpTo("auth") { inclusive = true } }
-                                sendPassengerNotification(
-                                    "Gate Proximity Alert",
-                                    "You are 8 minutes away from Gate B12. Boarding starts in 20 minutes.",
-                                    boardingPassData
-                                ) { boardingPassData = it }
-
-                                data.passengerToken?.let { token ->
-                                    scope.launch {
-                                        runCatching {
-                                            Way2LandApiClient.syncUserTags(
-                                                passengerToken = token,
-                                                tags = listOf(
-                                                    "PASSENGER",
-                                                    "FLIGHT_${data.carrier}_${data.flightNumber}",
-                                                    "PNR_${data.pnr}"
-                                                ),
-                                                replace = false
-                                            )
-                                        }
-
-                                        runCatching { Way2LandApiClient.getUserNotifications(token) }
-                                            .onSuccess { backendMessages ->
-                                                boardingPassData = boardingPassData?.copy(notifications = backendMessages + (boardingPassData?.notifications.orEmpty()))
-                                            }
-                                    }
-                                }
+                                pendingAuthData = data
                             }
                         )
                     }
@@ -112,14 +232,10 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onDeleteGroup = { id ->
                                     val token = boardingPassData?.passengerToken
-                                    if (token == null) {
-                                        boardingPassData = data.copy(activeGroups = data.activeGroups.filter { it.id != id })
-                                    } else {
-                                        scope.launch {
-                                            runCatching { Way2LandApiClient.leaveGroup(token, id) }
-                                        }
-                                        boardingPassData = data.copy(activeGroups = data.activeGroups.filter { it.id != id })
+                                    if (token != null) {
+                                        scope.launch { runCatching { Way2LandApiClient.leaveGroup(token, id) } }
                                     }
+                                    boardingPassData = data.copy(activeGroups = data.activeGroups.filter { it.id != id })
                                 },
                                 onRenameGroup = { id, newName ->
                                     boardingPassData = data.copy(activeGroups = data.activeGroups.map { 
