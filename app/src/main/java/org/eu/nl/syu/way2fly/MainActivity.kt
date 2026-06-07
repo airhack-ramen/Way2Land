@@ -1,6 +1,7 @@
 package org.eu.nl.syu.way2fly
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -82,222 +83,257 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
+                    Log.i("MainActivity", "Auth Flow Start: automatic registration/verification for phoneNumber=$phoneNumber")
                     authIsWorking = true
                     authIsError = false
                     authStatusMessage = "Registering and verifying device automatically..."
 
+                    Log.d("MainActivity", "Auth Flow: registering device for phoneNumber=$phoneNumber")
                     val registrationResult = runCatching { Way2LandApiClient.registerDevice(phoneNumber) }
                     if (registrationResult.isFailure) {
                         val exception = registrationResult.exceptionOrNull()
+                        Log.e("MainActivity", "Auth Flow: device registration failed for phoneNumber=$phoneNumber", exception)
                         authStatusMessage = when (exception) {
                             is BackendApiException -> "Register failed (${exception.statusCode}): ${exception.message}"
                             else -> exception?.message ?: "Device registration failed"
-                          }
-                          allowDebugBypass("backend registration is unavailable")
-                          if (boardingPassData != null) {
-                              return@LaunchedEffect
-                          }
-                          authIsError = true
-                          authIsWorking = false
-                          PassengerSessionStore.clear(context)
-                          boardingPassData = null
-                          pendingAuthData = null
-                          return@LaunchedEffect
-                      }
+                        }
+                        allowDebugBypass("backend registration is unavailable")
+                        if (boardingPassData != null) {
+                            Log.i("MainActivity", "Auth Flow: debug bypass allowed active session")
+                            return@LaunchedEffect
+                        }
+                        authIsError = true
+                        authIsWorking = false
+                        PassengerSessionStore.clear(context)
+                        boardingPassData = null
+                        pendingAuthData = null
+                        return@LaunchedEffect
+                    }
+                    Log.i("MainActivity", "Auth Flow: device registered successfully")
 
-                      val reachabilityResult = runCatching { Way2LandApiClient.retrieveDeviceReachability(phoneNumber) }
-                      if (reachabilityResult.isFailure) {
-                          val exception = reachabilityResult.exceptionOrNull()
-                          authStatusMessage = when (exception) {
-                              is BackendApiException -> "Verification failed (${exception.statusCode}): ${exception.message}"
-                              else -> exception?.message ?: "Device verification failed"
-                          }
-                          allowDebugBypass("device verification is unavailable")
-                          if (boardingPassData != null) {
-                              return@LaunchedEffect
-                          }
-                          authIsError = true
-                          authIsWorking = false
-                          PassengerSessionStore.clear(context)
-                          boardingPassData = null
-                          pendingAuthData = null
-                          return@LaunchedEffect
-                      }
+                    Log.d("MainActivity", "Auth Flow: retrieving device reachability for phoneNumber=$phoneNumber")
+                    val reachabilityResult = runCatching { Way2LandApiClient.retrieveDeviceReachability(phoneNumber) }
+                    if (reachabilityResult.isFailure) {
+                        val exception = reachabilityResult.exceptionOrNull()
+                        Log.e("MainActivity", "Auth Flow: device reachability lookup failed for phoneNumber=$phoneNumber", exception)
+                        authStatusMessage = when (exception) {
+                            is BackendApiException -> "Verification failed (${exception.statusCode}): ${exception.message}"
+                            else -> exception?.message ?: "Device verification failed"
+                        }
+                        allowDebugBypass("device verification is unavailable")
+                        if (boardingPassData != null) {
+                            Log.i("MainActivity", "Auth Flow: debug bypass allowed active session")
+                            return@LaunchedEffect
+                        }
+                        authIsError = true
+                        authIsWorking = false
+                        PassengerSessionStore.clear(context)
+                        boardingPassData = null
+                        pendingAuthData = null
+                        return@LaunchedEffect
+                    }
+                    Log.i("MainActivity", "Auth Flow: device reachability check success: ${reachabilityResult.getOrNull()?.reachabilityStatus}")
 
-                      val locationResult = runCatching { Way2LandApiClient.retrieveLocation(phoneNumber) }
-                      if (locationResult.isFailure) {
-                          val exception = locationResult.exceptionOrNull()
-                          authStatusMessage = when (exception) {
-                              is BackendApiException -> "Location check failed (${exception.statusCode}): ${exception.message}"
-                              else -> exception?.message ?: "Device location check failed"
-                          }
-                          allowDebugBypass("location lookup is unavailable")
-                          if (boardingPassData != null) {
-                              return@LaunchedEffect
-                          }
-                          authIsError = true
-                          authIsWorking = false
-                          PassengerSessionStore.clear(context)
-                          boardingPassData = null
-                          pendingAuthData = null
-                          return@LaunchedEffect
-                      }
+                    Log.d("MainActivity", "Auth Flow: retrieving device location for phoneNumber=$phoneNumber")
+                    val locationResult = runCatching { Way2LandApiClient.retrieveLocation(phoneNumber) }
+                    if (locationResult.isFailure) {
+                        val exception = locationResult.exceptionOrNull()
+                        Log.e("MainActivity", "Auth Flow: location retrieval failed for phoneNumber=$phoneNumber", exception)
+                        authStatusMessage = when (exception) {
+                            is BackendApiException -> "Location check failed (${exception.statusCode}): ${exception.message}"
+                            else -> exception?.message ?: "Device location check failed"
+                        }
+                        allowDebugBypass("location lookup is unavailable")
+                        if (boardingPassData != null) {
+                            Log.i("MainActivity", "Auth Flow: debug bypass allowed active session")
+                            return@LaunchedEffect
+                        }
+                        authIsError = true
+                        authIsWorking = false
+                        PassengerSessionStore.clear(context)
+                        boardingPassData = null
+                        pendingAuthData = null
+                        return@LaunchedEffect
+                    }
 
-                      val location = locationResult.getOrThrow()
-                      val verificationResult = runCatching {
-                          Way2LandApiClient.verifyLocation(
-                              phoneNumber = phoneNumber,
-                              centerLatitude = location.area.center.latitude,
-                              centerLongitude = location.area.center.longitude,
-                              radiusMeters = location.area.radius
-                          )
-                      }
+                    val location = locationResult.getOrThrow()
+                    Log.i("MainActivity", "Auth Flow: location retrieved successfully: latitude=${location.area.center.latitude}, longitude=${location.area.center.longitude}, radius=${location.area.radius}")
 
-                      val verification = verificationResult.getOrNull()
-                      if (verification == null || verification.verificationResult != "TRUE") {
-                          authStatusMessage = "Security verification failed. Access denied."
-                          allowDebugBypass("security verification did not pass")
-                          if (boardingPassData != null) {
-                              return@LaunchedEffect
-                          }
-                          authIsError = true
-                          authIsWorking = false
-                          PassengerSessionStore.clear(context)
-                          boardingPassData = null
-                          pendingAuthData = null
-                          return@LaunchedEffect
-                      }
+                    Log.d("MainActivity", "Auth Flow: verifying location for phoneNumber=$phoneNumber")
+                    val verificationResult = runCatching {
+                        Way2LandApiClient.verifyLocation(
+                            phoneNumber = phoneNumber,
+                            centerLatitude = location.area.center.latitude,
+                            centerLongitude = location.area.center.longitude,
+                            radiusMeters = location.area.radius
+                        )
+                    }
 
-                      val initialGroups = listOf(
-                          FriendGroup(UUID.randomUUID().toString(), "Family Vacation", 4, "Nearby"),
-                          FriendGroup(UUID.randomUUID().toString(), "Project Team", 3, "20m")
-                      )
+                    val verification = verificationResult.getOrNull()
+                    if (verification == null || verification.verificationResult != "TRUE") {
+                        val exception = verificationResult.exceptionOrNull()
+                        Log.e("MainActivity", "Auth Flow: security verification failed for phoneNumber=$phoneNumber. Result=${verification?.verificationResult}", exception)
+                        authStatusMessage = "Security verification failed. Access denied."
+                        allowDebugBypass("security verification did not pass")
+                        if (boardingPassData != null) {
+                            Log.i("MainActivity", "Auth Flow: debug bypass allowed active session")
+                            return@LaunchedEffect
+                        }
+                        authIsError = true
+                        authIsWorking = false
+                        PassengerSessionStore.clear(context)
+                        boardingPassData = null
+                        pendingAuthData = null
+                        return@LaunchedEffect
+                    }
+                    Log.i("MainActivity", "Auth Flow: security verification passed successfully")
 
-                      BackendClient.jwtToken = passengerToken
-                      boardingPassData = data.copy(activeGroups = initialGroups)
-                      authStatusMessage = "Passenger verified automatically."
-                      navController.navigate("passenger_main") { popUpTo("auth") { inclusive = true } }
+                    val initialGroups = listOf(
+                        FriendGroup(UUID.randomUUID().toString(), "Family Vacation", 4, "Nearby"),
+                        FriendGroup(UUID.randomUUID().toString(), "Project Team", 3, "20m")
+                    )
 
-                      runCatching {
-                          Way2LandApiClient.syncUserTags(
-                              passengerToken = passengerToken,
-                              tags = listOf(
-                                  "PASSENGER",
-                                  "FLIGHT_${data.carrier}_${data.flightNumber}",
-                                  "PNR_${data.pnr}"
-                              ),
-                              replace = false
-                          )
-                      }
+                    BackendClient.jwtToken = passengerToken
+                    boardingPassData = data.copy(activeGroups = initialGroups)
+                    authStatusMessage = "Passenger verified automatically."
+                    Log.i("MainActivity", "Auth Flow Success: passenger verified automatically. phone=$phoneNumber")
+                    navController.navigate("passenger_main") { popUpTo("auth") { inclusive = true } }
 
-                      runCatching { Way2LandApiClient.getUserNotifications(passengerToken) }
-                          .onSuccess { backendMessages ->
-                              boardingPassData = boardingPassData?.copy(notifications = backendMessages + (boardingPassData?.notifications.orEmpty()))
-                          }
+                    Log.d("MainActivity", "Auth Flow: syncing user tags to backend")
+                    runCatching {
+                        Way2LandApiClient.syncUserTags(
+                            passengerToken = passengerToken,
+                            tags = listOf(
+                                "PASSENGER",
+                                "FLIGHT_${data.carrier}_${data.flightNumber}",
+                                "PNR_${data.pnr}"
+                            ),
+                            replace = false
+                        )
+                    }.onSuccess {
+                        Log.i("MainActivity", "Auth Flow: user tags synced successfully to backend")
+                    }.onFailure { exception ->
+                        Log.e("MainActivity", "Auth Flow: syncUserTags failed", exception)
+                    }
 
-                      authIsWorking = false
-                      pendingAuthData = null
-                  }
+                    Log.d("MainActivity", "Auth Flow: fetching notifications from backend")
+                    runCatching { Way2LandApiClient.getUserNotifications(passengerToken) }
+                        .onSuccess { backendMessages ->
+                            Log.i("MainActivity", "Auth Flow: successfully loaded ${backendMessages.size} notifications from backend")
+                            boardingPassData = boardingPassData?.copy(notifications = backendMessages + (boardingPassData?.notifications.orEmpty()))
+                        }
+                        .onFailure { exception ->
+                            Log.e("MainActivity", "Auth Flow: getUserNotifications failed", exception)
+                        }
 
-                  NavHost(
-                      navController = navController,
-                      startDestination = "auth",
-                      enterTransition = { fadeIn(tween(400)) + slideInHorizontally(tween(400)) { it } },
-                      exitTransition = { fadeOut(tween(400)) + slideOutHorizontally(tween(400)) { -it } }
-                  ) {
-                      composable("auth") {
-                          AuthScreen(
-                              statusMessage = authStatusMessage,
-                              statusIsError = authIsError,
-                              statusIsWorking = authIsWorking,
-                              onPassengerAuthenticated = { data ->
-                                  pendingAuthData = data
-                              }
-                          )
-                      }
-                      
-                      composable("passenger_main") {
-                          boardingPassData?.let { data ->
-                              
-                              // Poll backend for real-time notifications
-                              LaunchedEffect(Unit) {
-                                  while(true) {
-                                      val newNotifications = BackendClient.fetchNotifications()
-                                      if (newNotifications.isNotEmpty()) {
-                                          // Update state with newly fetched notifications (avoiding exact duplicates by ID)
-                                          val existingIds = boardingPassData?.notifications?.map { it.body } ?: emptyList()
-                                          val filtered = newNotifications.filter { it.body !in existingIds }
-                                          if (filtered.isNotEmpty()) {
-                                              boardingPassData = boardingPassData?.copy(
-                                                  notifications = boardingPassData!!.notifications + filtered
-                                              )
-                                          }
-                                      }
-                                      delay(5000) // Poll every 5 seconds
-                                  }
-                              }
-                              
-                              PassengerMainScreen(
-                                  data = data,
-                                  onStepToggled = { index ->
-                                      val newSteps = data.guidanceSteps.toMutableList()
-                                      val step = newSteps[index]
-                                      newSteps[index] = step.copy(isCompleted = !step.isCompleted)
-                                      boardingPassData = data.copy(guidanceSteps = newSteps)
-                                  },
-                                  onOpenDev = { navController.navigate("dev") },
-                                  onDeleteNotification = { id ->
-                                      boardingPassData = data.copy(notifications = data.notifications.filter { it.id != id })
-                                  },
-                                  onCreateGroup = { name ->
-                                      val newGroup = FriendGroup(UUID.randomUUID().toString(), name, 1, "0m")
-                                      boardingPassData = data.copy(activeGroups = data.activeGroups + newGroup)
-                                  },
-                                  onDeleteGroup = { id ->
-                                      val token = boardingPassData?.passengerToken
-                                      if (token != null) {
-                                          scope.launch { runCatching { Way2LandApiClient.leaveGroup(token, id) } }
-                                      }
-                                      boardingPassData = data.copy(activeGroups = data.activeGroups.filter { it.id != id })
-                                  },
-                                  onRenameGroup = { id, newName ->
-                                      boardingPassData = data.copy(activeGroups = data.activeGroups.map { 
-                                          if (it.id == id) it.copy(name = newName) else it 
-                                      })
-                                  },
-                                  onJoinGroup = { groupId ->
-                                      val newGroup = FriendGroup(groupId, "Joined Group", 1, "0m")
-                                      boardingPassData = data.copy(activeGroups = data.activeGroups + newGroup)
-                                  },
-                                  onLogout = {
-                                      PassengerSessionStore.clear(context)
-                                      boardingPassData = null
-                                      navController.navigate("auth") { popUpTo(0) }
-                                  }
-                              )
-                          }
-                      }
+                    authIsWorking = false
+                    pendingAuthData = null
+                }
 
-                      composable("dev") {
-                          boardingPassData?.let { data ->
-                              DevToolScreen(
-                                  currentData = data,
-                                  onDataChanged = { boardingPassData = it },
-                                  onBack = { navController.popBackStack() }
-                              )
-                          }
-                      }
-                  }
-              }
-          }
-      }
+                NavHost(
+                    navController = navController,
+                    startDestination = "auth",
+                    enterTransition = { fadeIn(tween(400)) + slideInHorizontally(tween(400)) { it } },
+                    exitTransition = { fadeOut(tween(400)) + slideOutHorizontally(tween(400)) { -it } }
+                ) {
+                    composable("auth") {
+                        AuthScreen(
+                            statusMessage = authStatusMessage,
+                            statusIsError = authIsError,
+                            statusIsWorking = authIsWorking,
+                            onPassengerAuthenticated = { data ->
+                                pendingAuthData = data
+                            }
+                        )
+                    }
+                    
+                    composable("passenger_main") {
+                        boardingPassData?.let { data ->
+                            
+                            // Poll backend for real-time notifications
+                            LaunchedEffect(Unit) {
+                                while(true) {
+                                    val newNotifications = BackendClient.fetchNotifications()
+                                    if (newNotifications.isNotEmpty()) {
+                                        // Update state with newly fetched notifications (avoiding exact duplicates by ID)
+                                        val existingIds = boardingPassData?.notifications?.map { it.body } ?: emptyList()
+                                        val filtered = newNotifications.filter { it.body !in existingIds }
+                                        if (filtered.isNotEmpty()) {
+                                            boardingPassData = boardingPassData?.copy(
+                                                notifications = boardingPassData!!.notifications + filtered
+                                            )
+                                        }
+                                    }
+                                    delay(5000) // Poll every 5 seconds
+                                }
+                            }
+                            
+                            PassengerMainScreen(
+                                data = data,
+                                onStepToggled = { index ->
+                                    val newSteps = data.guidanceSteps.toMutableList()
+                                    val step = newSteps[index]
+                                    newSteps[index] = step.copy(isCompleted = !step.isCompleted)
+                                    boardingPassData = data.copy(guidanceSteps = newSteps)
+                                },
+                                onOpenDev = { navController.navigate("dev") },
+                                onDeleteNotification = { id ->
+                                    boardingPassData = data.copy(notifications = data.notifications.filter { it.id != id })
+                                },
+                                onCreateGroup = { name ->
+                                    val newGroup = FriendGroup(UUID.randomUUID().toString(), name, 1, "0m")
+                                    boardingPassData = data.copy(activeGroups = data.activeGroups + newGroup)
+                                },
+                                onDeleteGroup = { id ->
+                                    val token = boardingPassData?.passengerToken
+                                    if (token != null) {
+                                        Log.i("MainActivity", "Leaving group: ID=$id")
+                                        scope.launch {
+                                            runCatching { Way2LandApiClient.leaveGroup(token, id) }
+                                                .onSuccess { Log.i("MainActivity", "Successfully left group on backend: ID=$id") }
+                                                .onFailure { exception -> Log.e("MainActivity", "Failed to leave group on backend: ID=$id", exception) }
+                                        }
+                                    }
+                                    boardingPassData = data.copy(activeGroups = data.activeGroups.filter { it.id != id })
+                                },
+                                onRenameGroup = { id, newName ->
+                                    boardingPassData = data.copy(activeGroups = data.activeGroups.map { 
+                                        if (it.id == id) it.copy(name = newName) else it 
+                                    })
+                                },
+                                onJoinGroup = { groupId ->
+                                    val newGroup = FriendGroup(groupId, "Joined Group", 1, "0m")
+                                    boardingPassData = data.copy(activeGroups = data.activeGroups + newGroup)
+                                },
+                                onLogout = {
+                                    PassengerSessionStore.clear(context)
+                                    boardingPassData = null
+                                    navController.navigate("auth") { popUpTo(0) }
+                                }
+                            )
+                        }
+                    }
 
-      private fun sendPassengerNotification(title: String, body: String, data: BoardingPassData?, onUpdate: (BoardingPassData) -> Unit) {
-          data?.let {
-              val newMessage = InboxMessage(UUID.randomUUID().toString(), title, body, System.currentTimeMillis())
-              onUpdate(it.copy(notifications = it.notifications + newMessage))
-          }
-      }
+                    composable("dev") {
+                        boardingPassData?.let { data ->
+                            DevToolScreen(
+                                currentData = data,
+                                onDataChanged = { boardingPassData = it },
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun sendPassengerNotification(title: String, body: String, data: BoardingPassData?, onUpdate: (BoardingPassData) -> Unit) {
+        data?.let {
+            val newMessage = InboxMessage(UUID.randomUUID().toString(), title, body, System.currentTimeMillis())
+            onUpdate(it.copy(notifications = it.notifications + newMessage))
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.util.Log
 import kotlinx.coroutines.launch
 import org.eu.nl.syu.way2fly.model.BoardingPassData
 import org.eu.nl.syu.way2fly.model.FriendGroup
@@ -135,7 +136,10 @@ fun GroupsScreen(
                     items(groups) { group ->
                         GroupCard(
                             group = group,
-                            onDelete = { onDeleteGroup(group.id) },
+                            onDelete = {
+                                Log.i("GroupsScreen", "Leaving group: id=${group.id}, name=${group.name}")
+                                onDeleteGroup(group.id)
+                            },
                             onRename = { groupToRename = group }
                         )
                     }
@@ -165,6 +169,7 @@ fun GroupsScreen(
             onConfirm = { name ->
                 val token = data.passengerToken
                 if (token == null) {
+                    Log.w("GroupsScreen", "Create group abort: passengerToken is null")
                     backendError = "Authenticate first to create a backend group"
                     return@GroupActionDialog
                 }
@@ -172,13 +177,17 @@ fun GroupsScreen(
                 scope.launch {
                     backendError = null
                     try {
+                        Log.i("GroupsScreen", "Creating group: name=$name")
                         val response = Way2LandApiClient.createGroup(token)
+                        Log.i("GroupsScreen", "Group created successfully: id=${response.groupId}, joinCode=${response.joinCode}")
                         onCreateGroup(name)
                         backendStatus = "Created group ${response.groupId} with join code ${response.joinCode}"
                         showCreateDialog = false
                     } catch (exception: BackendApiException) {
+                        Log.e("GroupsScreen", "Failed to create group: BackendApiException status=${exception.statusCode}", exception)
                         backendError = "Create group failed (${exception.statusCode}): ${exception.message}"
                     } catch (exception: Exception) {
+                        Log.e("GroupsScreen", "Failed to create group: unexpected exception", exception)
                         backendError = exception.message ?: "Create group failed"
                     }
                 }
@@ -195,6 +204,7 @@ fun GroupsScreen(
             onConfirm = { joinCode ->
                 val token = data.passengerToken
                 if (token == null) {
+                    Log.w("GroupsScreen", "Join group abort: passengerToken is null")
                     backendError = "Authenticate first to join a backend group"
                     return@GroupActionDialog
                 }
@@ -202,13 +212,17 @@ fun GroupsScreen(
                 scope.launch {
                     backendError = null
                     try {
+                        Log.i("GroupsScreen", "Joining group: code=$joinCode")
                         val response = Way2LandApiClient.joinGroup(token, joinCode.trim())
+                        Log.i("GroupsScreen", "Joined group successfully: id=${response.groupId}")
                         onJoinGroup(response.groupId)
                         backendStatus = "Joined group ${response.groupId}"
                         showJoinDialog = false
                     } catch (exception: BackendApiException) {
+                        Log.e("GroupsScreen", "Failed to join group: BackendApiException status=${exception.statusCode}", exception)
                         backendError = "Join group failed (${exception.statusCode}): ${exception.message}"
                     } catch (exception: Exception) {
+                        Log.e("GroupsScreen", "Failed to join group: unexpected exception", exception)
                         backendError = exception.message ?: "Join group failed"
                     }
                 }
@@ -222,6 +236,7 @@ fun GroupsScreen(
             initialName = group.name,
             onDismiss = { groupToRename = null },
             onConfirm = { newName ->
+                Log.i("GroupsScreen", "Renaming group: id=${group.id}, oldName=${group.name}, newName=$newName")
                 onRenameGroup(group.id, newName)
                 groupToRename = null
             }

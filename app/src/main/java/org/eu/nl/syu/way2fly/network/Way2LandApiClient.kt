@@ -6,6 +6,7 @@ import org.eu.nl.syu.way2fly.BuildConfig
 import org.eu.nl.syu.way2fly.model.InboxMessage
 import org.json.JSONArray
 import org.json.JSONObject
+import android.util.Log
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
@@ -73,6 +74,7 @@ data class BackendApiException(
 ) : Exception(message)
 
 object Way2LandApiClient {
+    private const val TAG = "Way2LandApi"
     private const val CONNECT_TIMEOUT_MS = 15_000
     private const val READ_TIMEOUT_MS = 15_000
     private val baseUrl = BuildConfig.BACKEND_BASE_URL.trimEnd('/')
@@ -274,7 +276,9 @@ object Way2LandApiClient {
 
     private suspend fun getJson(path: String, passengerToken: String): org.json.JSONArray {
         return withContext(Dispatchers.IO) {
-            val connection = (URL(baseUrl + path).openConnection() as HttpURLConnection).apply {
+            val url = baseUrl + path
+            Log.d(TAG, "GET request starting: URL=$url, AuthHeaderPresent=true")
+            val connection = (URL(url).openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 connectTimeout = CONNECT_TIMEOUT_MS
                 readTimeout = READ_TIMEOUT_MS
@@ -285,8 +289,10 @@ object Way2LandApiClient {
             try {
                 val statusCode = connection.responseCode
                 val responseBody = readBody(if (statusCode in 200..299) connection.inputStream else connection.errorStream)
+                Log.d(TAG, "GET request success: URL=$url -> HTTP $statusCode, BodyLength=${responseBody.length}, Body=$responseBody")
 
                 if (statusCode !in 200..299) {
+                    Log.e(TAG, "GET request failed: URL=$url -> HTTP $statusCode, Body=$responseBody")
                     throw BackendApiException(
                         statusCode = statusCode,
                         message = responseBody.ifBlank { "Backend request failed with HTTP $statusCode" }
@@ -294,6 +300,10 @@ object Way2LandApiClient {
                 }
 
                 org.json.JSONArray(responseBody)
+            } catch (e: Exception) {
+                if (e is BackendApiException) throw e
+                Log.e(TAG, "GET request connection error: URL=$url -> Exception=${e.javaClass.simpleName}: ${e.message}", e)
+                throw e
             } finally {
                 connection.disconnect()
             }
@@ -302,7 +312,9 @@ object Way2LandApiClient {
 
     private suspend fun getJsonObjectWithAuth(path: String, passengerToken: String): JSONObject {
         return withContext(Dispatchers.IO) {
-            val connection = (URL(baseUrl + path).openConnection() as HttpURLConnection).apply {
+            val url = baseUrl + path
+            Log.d(TAG, "GET (auth) request starting: URL=$url, AuthHeaderPresent=true")
+            val connection = (URL(url).openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 connectTimeout = CONNECT_TIMEOUT_MS
                 readTimeout = READ_TIMEOUT_MS
@@ -313,8 +325,10 @@ object Way2LandApiClient {
             try {
                 val statusCode = connection.responseCode
                 val responseBody = readBody(if (statusCode in 200..299) connection.inputStream else connection.errorStream)
+                Log.d(TAG, "GET (auth) request success: URL=$url -> HTTP $statusCode, BodyLength=${responseBody.length}, Body=$responseBody")
 
                 if (statusCode !in 200..299) {
+                    Log.e(TAG, "GET (auth) request failed: URL=$url -> HTTP $statusCode, Body=$responseBody")
                     throw BackendApiException(
                         statusCode = statusCode,
                         message = responseBody.ifBlank { "Backend request failed with HTTP $statusCode" }
@@ -322,6 +336,10 @@ object Way2LandApiClient {
                 }
 
                 if (responseBody.isBlank()) JSONObject() else JSONObject(responseBody)
+            } catch (e: Exception) {
+                if (e is BackendApiException) throw e
+                Log.e(TAG, "GET (auth) request connection error: URL=$url -> Exception=${e.javaClass.simpleName}: ${e.message}", e)
+                throw e
             } finally {
                 connection.disconnect()
             }
@@ -330,7 +348,9 @@ object Way2LandApiClient {
 
     private suspend fun requestJson(method: String, path: String, payload: JSONObject, passengerToken: String? = null): JSONObject {
         return withContext(Dispatchers.IO) {
-            val connection = (URL(baseUrl + path).openConnection() as HttpURLConnection).apply {
+            val url = baseUrl + path
+            Log.d(TAG, "$method request starting: URL=$url, AuthHeaderPresent=${passengerToken != null}, Payload=$payload")
+            val connection = (URL(url).openConnection() as HttpURLConnection).apply {
                 requestMethod = method
                 connectTimeout = CONNECT_TIMEOUT_MS
                 readTimeout = READ_TIMEOUT_MS
@@ -353,8 +373,10 @@ object Way2LandApiClient {
 
                 val statusCode = connection.responseCode
                 val responseBody = readBody(if (statusCode in 200..299) connection.inputStream else connection.errorStream)
+                Log.d(TAG, "$method request success: URL=$url -> HTTP $statusCode, BodyLength=${responseBody.length}, Body=$responseBody")
 
                 if (statusCode !in 200..299) {
+                    Log.e(TAG, "$method request failed: URL=$url -> HTTP $statusCode, Body=$responseBody")
                     throw BackendApiException(
                         statusCode = statusCode,
                         message = responseBody.ifBlank { "Backend request failed with HTTP $statusCode" }
@@ -362,6 +384,10 @@ object Way2LandApiClient {
                 }
 
                 if (responseBody.isBlank()) JSONObject() else JSONObject(responseBody)
+            } catch (e: Exception) {
+                if (e is BackendApiException) throw e
+                Log.e(TAG, "$method request connection error: URL=$url -> Exception=${e.javaClass.simpleName}: ${e.message}", e)
+                throw e
             } finally {
                 connection.disconnect()
             }

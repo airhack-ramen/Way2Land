@@ -29,6 +29,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.util.Log
 import kotlinx.coroutines.launch
 import org.eu.nl.syu.way2fly.BuildConfig
 import org.eu.nl.syu.way2fly.model.BoardingPassData
@@ -70,6 +71,7 @@ fun MapScreen(data: BoardingPassData) {
                 LaunchedEffect(phoneNumber, selectedFloor, data.passengerToken) {
                     val token = data.passengerToken
                     if (token == null) {
+                        Log.w("MapScreen", "Location sync abort: passengerToken is null")
                         backendError = "Authenticate first to sync passenger location"
                         return@LaunchedEffect
                     }
@@ -77,17 +79,23 @@ fun MapScreen(data: BoardingPassData) {
                     fun allowDebugBypass(reason: String): Boolean {
                         if (!BuildConfig.DEBUG) return false
 
+                        Log.w("MapScreen", "Location sync: debug bypass active due to: $reason")
                         backendError = null
                         backendStatus = "POC mode: $reason"
                         return true
                     }
 
+                    Log.i("MapScreen", "Location sync cycle start: phone=$phoneNumber, floor=$selectedFloor")
                     backendError = null
                     backendStatus = "Syncing passenger location and Orange device state..."
 
+                    Log.d("MapScreen", "Location sync: registering device")
                     runCatching {
                         Way2LandApiClient.registerDevice(phoneNumber)
+                    }.onSuccess {
+                        Log.d("MapScreen", "Location sync: device registration success")
                     }.onFailure { exception ->
+                        Log.e("MapScreen", "Location sync: device registration failed", exception)
                         backendError = when (exception) {
                             is BackendApiException -> "Register failed (${exception.statusCode}): ${exception.message}"
                             else -> exception.message ?: "Device registration failed"
@@ -99,11 +107,14 @@ fun MapScreen(data: BoardingPassData) {
                         return@LaunchedEffect
                     }
 
+                    Log.d("MapScreen", "Location sync: checking device reachability")
                     runCatching { Way2LandApiClient.retrieveDeviceReachability(phoneNumber) }
                         .onSuccess { reachability ->
+                            Log.i("MapScreen", "Location sync: device reachability check success: status=${reachability.reachabilityStatus}")
                             backendStatus = "Reachability ${reachability.reachabilityStatus} at ${reachability.lastStatusTime}"
                         }
                         .onFailure { exception ->
+                            Log.e("MapScreen", "Location sync: device reachability check failed", exception)
                             backendError = when (exception) {
                                 is BackendApiException -> "Reachability failed (${exception.statusCode}): ${exception.message}"
                                 else -> exception.message ?: "Reachability failed"
@@ -111,16 +122,24 @@ fun MapScreen(data: BoardingPassData) {
                             return@LaunchedEffect
                         }
 
+                    Log.d("MapScreen", "Location sync: retrieving device location")
                     runCatching { Way2LandApiClient.retrieveLocation(phoneNumber) }
                         .onSuccess { location ->
+                            Log.i("MapScreen", "Location sync: location retrieval success: lat=${location.area.center.latitude}, lon=${location.area.center.longitude}")
                             backendStatus = "Location ${location.area.center.latitude}, ${location.area.center.longitude} • ${location.area.radius.toInt()}m • ${location.area.areaType}"
+                            val latitude = if (selectedFloor == 0) 50.735851 else 50.736851
+                            val longitude = if (selectedFloor == 0) 7.10066 else 7.10166
+                            Log.d("MapScreen", "Location sync: updating user location on backend for floor=$selectedFloor to lat=$latitude, lon=$longitude")
                             runCatching {
-                                val latitude = if (selectedFloor == 0) 50.735851 else 50.736851
-                                val longitude = if (selectedFloor == 0) 7.10066 else 7.10166
                                 Way2LandApiClient.updateUserLocation(token, latitude, longitude, selectedFloor)
+                            }.onSuccess { status ->
+                                Log.i("MapScreen", "Location sync: updated user location on backend: status=$status")
+                            }.onFailure { updateException ->
+                                Log.e("MapScreen", "Location sync: failed to update user location on backend", updateException)
                             }
                         }
                         .onFailure { exception ->
+                            Log.e("MapScreen", "Location sync: location retrieval failed", exception)
                             backendError = when (exception) {
                                 is BackendApiException -> "Location lookup failed (${exception.statusCode}): ${exception.message}"
                                 else -> exception.message ?: "Location lookup failed"
@@ -128,6 +147,7 @@ fun MapScreen(data: BoardingPassData) {
                             return@LaunchedEffect
                         }
 
+                    Log.i("MapScreen", "Location sync cycle completed successfully")
                     backendStatus = "Passenger and device verified automatically."
                 }
 

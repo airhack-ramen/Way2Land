@@ -52,6 +52,7 @@ import com.google.mlkit.vision.common.InputImage
 import org.eu.nl.syu.way2fly.BuildConfig
 import org.eu.nl.syu.way2fly.model.BoardingPassData
 import org.eu.nl.syu.way2fly.network.BackendApiException
+import android.util.Log
 import org.eu.nl.syu.way2fly.network.PassengerSessionStore
 import org.eu.nl.syu.way2fly.network.Way2LandApiClient
 import org.eu.nl.syu.way2fly.ui.theme.Way2FlyTheme
@@ -144,9 +145,16 @@ fun PassengerAuthCard(onAuthenticated: (BoardingPassData) -> Unit) {
                         }
                     } else {
                         CameraPreview(onBarcodeScanned = { barcode ->
+                            Log.d("AuthScreen", "Scanned barcode data length: ${barcode.length}")
                             val data = BCBPParser.parse(barcode)
-                            if (data != null) { scannedData = data; scanError = null }
-                            else { scanError = "Invalid boarding pass format" }
+                            if (data != null) {
+                                Log.i("AuthScreen", "Successfully parsed boarding pass for: ${data.passengerName}")
+                                scannedData = data
+                                scanError = null
+                            } else {
+                                Log.w("AuthScreen", "Failed to parse boarding pass barcode")
+                                scanError = "Invalid boarding pass format"
+                            }
                         })
                     }
                     ScannerOverlay()
@@ -160,6 +168,7 @@ fun PassengerAuthCard(onAuthenticated: (BoardingPassData) -> Unit) {
                 TextButton(
                     onClick = {
                         val testRaw = "M1DOE/JOHN            EABCDEFJFKLAXDL 00123123Y001A00001 1"
+                        Log.i("AuthScreen", "Using test boarding pass")
                         scannedData = BCBPParser.parse(testRaw)
                     }
                 ) {
@@ -229,10 +238,12 @@ fun PassengerAuthCard(onAuthenticated: (BoardingPassData) -> Unit) {
                                     // For the demo bypass, if using test boarding pass PNR is "ABCDEF"
                                     val pnrToUse = if (normalizedPhoneNumber == "0") "ABCDEF" else data.pnr
                                     
+                                    Log.i("AuthScreen", "Exchanging passenger token: phone=$phoneToUse, PNR=$pnrToUse")
                                     val tokenResponse = Way2LandApiClient.exchangePassengerToken(
                                         phoneNumber = phoneToUse,
                                         pnr = pnrToUse
                                     )
+                                    Log.i("AuthScreen", "Passenger token exchange success, saving session")
                                     isAuthenticating = false
                                     onAuthenticated(
                                         data.copy(
@@ -243,9 +254,11 @@ fun PassengerAuthCard(onAuthenticated: (BoardingPassData) -> Unit) {
                                     )
                                     PassengerSessionStore.save(context, phoneToUse, tokenResponse.passengerToken)
                                 } catch (exception: BackendApiException) {
+                                    Log.e("AuthScreen", "Backend token exchange failed: status=${exception.statusCode}", exception)
                                     authError = "Backend auth failed (${exception.statusCode}): ${exception.message}"
                                     isAuthenticating = false
                                 } catch (exception: Exception) {
+                                    Log.e("AuthScreen", "Unexpected token exchange failure", exception)
                                     authError = exception.message ?: "Authentication failed"
                                     isAuthenticating = false
                                 }
@@ -697,9 +710,11 @@ fun CameraPreview(onBarcodeScanned: (String) -> Unit) {
                 factory = { ctx ->
                     val previewView = PreviewView(ctx)
                     val executor = ContextCompat.getMainExecutor(ctx)
+                    Log.d("AuthScreen", "CameraX: fetching camera provider instance")
                     cameraProviderFuture.addListener({
                         try {
                             val cameraProvider = cameraProviderFuture.get()
+                            Log.d("AuthScreen", "CameraX: binding preview and barcode analyzer use cases")
                             val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
                             val scanner = BarcodeScanning.getClient()
                             val imageAnalysis = ImageAnalysis.Builder().setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST).build()
@@ -708,13 +723,21 @@ fun CameraPreview(onBarcodeScanned: (String) -> Unit) {
                                 if (mediaImage != null) {
                                     val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
                                     scanner.process(image).addOnSuccessListener { barcodes ->
-                                        for (barcode in barcodes) { barcode.rawValue?.let { onBarcodeScanned(it) } }
+                                        for (barcode in barcodes) {
+                                            barcode.rawValue?.let {
+                                                Log.i("AuthScreen", "CameraX: barcode scanned")
+                                                onBarcodeScanned(it)
+                                            }
+                                        }
                                     }.addOnCompleteListener { imageProxy.close() }
                                 } else { imageProxy.close() }
                             }
                             cameraProvider.unbindAll()
                             cameraProvider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, imageAnalysis)
-                        } catch (exc: Exception) {}
+                            Log.i("AuthScreen", "CameraX: successfully bound camera to lifecycle")
+                        } catch (exc: Exception) {
+                            Log.e("AuthScreen", "CameraX: camera binding failed", exc)
+                        }
                     }, executor)
                     previewView
                 },
