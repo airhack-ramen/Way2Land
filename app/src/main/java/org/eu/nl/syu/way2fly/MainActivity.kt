@@ -24,6 +24,9 @@ import org.eu.nl.syu.way2fly.ui.*
 import org.eu.nl.syu.way2fly.ui.theme.Way2FlyTheme
 import java.util.*
 
+import org.eu.nl.syu.way2fly.util.BackendClient
+import kotlinx.coroutines.delay
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,11 +37,11 @@ class MainActivity : ComponentActivity() {
                 var boardingPassData by remember { mutableStateOf<BoardingPassData?>(null) }
                 var helpRequests by remember { mutableStateOf(listOf<HelpRequest>()) }
                 var staffNotifications by remember { mutableStateOf(listOf<InboxMessage>()) }
-                var passengerDatabase by remember { mutableStateOf(generateRandomPassengers(50)) }
+                var passengerDatabase by remember { mutableStateOf(generateRandomPassengers(100)) }
 
                 NavHost(
                     navController = navController,
-                    startDestination = "auth"
+                    startDestination = "auth" 
                 ) {
                     composable("auth") {
                         AuthScreen(
@@ -62,6 +65,25 @@ class MainActivity : ComponentActivity() {
                     
                     composable("passenger_main") {
                         boardingPassData?.let { data ->
+                            
+                            // Poll backend for real-time notifications
+                            LaunchedEffect(Unit) {
+                                while(true) {
+                                    val newNotifications = BackendClient.fetchNotifications()
+                                    if (newNotifications.isNotEmpty()) {
+                                        // Update state with newly fetched notifications (avoiding exact duplicates by ID)
+                                        val existingIds = boardingPassData?.notifications?.map { it.body } ?: emptyList()
+                                        val filtered = newNotifications.filter { it.body !in existingIds }
+                                        if (filtered.isNotEmpty()) {
+                                            boardingPassData = boardingPassData?.copy(
+                                                notifications = boardingPassData!!.notifications + filtered
+                                            )
+                                        }
+                                    }
+                                    delay(5000) // Poll every 5 seconds
+                                }
+                            }
+                            
                             PassengerMainScreen(
                                 data = data,
                                 onStepToggled = { index ->
@@ -131,20 +153,40 @@ class MainActivity : ComponentActivity() {
         val lastNames = listOf("Popescu", "Ionescu", "Dumitru", "Stan", "Gheorghe", "Rusu", "Matei", "Vasile", "Constantin", "Dinu")
         val cities = listOf("OTP", "CLJ", "TSR", "IAS", "LHR", "FRA", "CDG", "AMS")
         
-        return List(count) {
-            val name = "${lastNames.random()}/${firstNames.random()}"
-            BoardingPassData(
-                passengerName = name,
-                pnr = UUID.randomUUID().toString().substring(0, 6).uppercase(),
-                from = cities.random(),
-                to = cities.random(),
-                carrier = "RO",
-                flightNumber = String.format("%05d", (1..99999).random()),
-                date = "123",
-                seat = "${(1..30).random()}${('A'..'F').random()}",
-                threatScore = (0..100).random()
-            )
+        val passengers = mutableListOf<BoardingPassData>()
+        var i = 0
+        while (i < count) {
+            val isGroup = Math.random() > 0.6 // 40% chance to be in a group
+            val groupSize = if (isGroup) (2..5).random() else 1
+            val groupId = if (isGroup) UUID.randomUUID().toString().substring(0, 8) else null
+            
+            val toAdd = minOf(groupSize, count - i)
+            val lastName = lastNames.random() // Families usually share a last name
+            val flightNum = String.format("%05d", (1..99999).random())
+            val fromCity = cities.random()
+            val toCity = cities.random()
+
+            for (j in 0 until toAdd) {
+                val name = "${lastName}/${firstNames.random()}"
+                passengers.add(
+                    BoardingPassData(
+                        passengerName = name,
+                        pnr = UUID.randomUUID().toString().substring(0, 6).uppercase(),
+                        from = fromCity,
+                        to = toCity,
+                        carrier = "RO",
+                        flightNumber = flightNum,
+                        date = "123",
+                        seat = "${(1..30).random()}${('A'..'F').random()}",
+                        threatScore = (0..100).random(),
+                        groupId = groupId,
+                        companionCount = toAdd - 1
+                    )
+                )
+                i++
+            }
         }
+        return passengers
     }
 }
 

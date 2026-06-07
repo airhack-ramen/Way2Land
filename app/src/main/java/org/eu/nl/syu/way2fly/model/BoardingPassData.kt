@@ -12,7 +12,9 @@ data class BoardingPassData(
     val phoneNumber: String? = null,
     val notifications: List<InboxMessage> = emptyList(),
     val guidanceSteps: List<GuidanceStep> = defaultSteps(),
-    val threatScore: Int = (0..100).random()
+    val threatScore: Int = (0..100).random(),
+    val groupId: String? = null,
+    val companionCount: Int = 0
 )
 
 fun defaultSteps() = listOf(

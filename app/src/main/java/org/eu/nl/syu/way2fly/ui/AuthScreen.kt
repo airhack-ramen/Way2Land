@@ -48,13 +48,14 @@ import com.google.mlkit.vision.common.InputImage
 import org.eu.nl.syu.way2fly.model.BoardingPassData
 import org.eu.nl.syu.way2fly.ui.theme.Way2FlyTheme
 import org.eu.nl.syu.way2fly.util.BCBPParser
+import org.eu.nl.syu.way2fly.util.BackendClient
+import kotlinx.coroutines.launch
 
 @Composable
 fun AuthScreen(
     onPassengerAuthenticated: (BoardingPassData) -> Unit,
-    onStaffAuthenticated: () -> Unit
+    onStaffAuthenticated: () -> Unit // Kept for backwards compatibility if needed elsewhere
 ) {
-    var selectedTabIndex by remember { mutableIntStateOf(0) }
     val scrollState = rememberScrollState()
 
     Box(
@@ -109,18 +110,7 @@ fun AuthScreen(
 
             Spacer(modifier = Modifier.height(40.dp))
 
-            RoleSelector(
-                selectedRole = selectedTabIndex,
-                onRoleSelected = { selectedTabIndex = it }
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            if (selectedTabIndex == 0) {
-                PassengerAuthCard(onPassengerAuthenticated)
-            } else {
-                StaffAuthCard(onStaffAuthenticated)
-            }
+            PassengerAuthCard(onPassengerAuthenticated)
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -137,56 +127,7 @@ fun AuthScreen(
     }
 }
 
-@Composable
-private fun RoleSelector(
-    selectedRole: Int,
-    onRoleSelected: (Int) -> Unit
-) {
-    val roles = listOf(
-        "Passenger" to Icons.Default.Person,
-        "Staff" to Icons.Default.AirplanemodeActive
-    )
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(52.dp)
-            .clip(RoundedCornerShape(26.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        roles.forEachIndexed { index, (label, icon) ->
-            val selected = selectedRole == index
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(26.dp))
-                    .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
-                    .clickable { onRoleSelected(index) },
-                contentAlignment = Alignment.Center
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-    }
-}
+// Removed RoleSelector and StaffAuthCard as they are deprecated.
 
 @Composable
 fun PassengerAuthCard(onAuthenticated: (BoardingPassData) -> Unit) {
@@ -194,6 +135,8 @@ fun PassengerAuthCard(onAuthenticated: (BoardingPassData) -> Unit) {
     var scannedData by remember { mutableStateOf<BoardingPassData?>(null) }
     var scanError by remember { mutableStateOf<String?>(null) }
     var permissionState by remember { mutableStateOf<PermissionState>(PermissionState.Initial) }
+    val coroutineScope = rememberCoroutineScope()
+    var isLoading by remember { mutableStateOf(false) }
 
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
@@ -318,8 +261,26 @@ fun PassengerAuthCard(onAuthenticated: (BoardingPassData) -> Unit) {
                 val isPhoneValid = phoneNumber == "0" || (phoneNumber.length >= 10 && phoneNumber.all { it.isDigit() })
 
                 Button(
-                    onClick = { scannedData?.let { onAuthenticated(it.copy(phoneNumber = phoneNumber)) } },
-                    enabled = scannedData != null && isPhoneValid,
+                    onClick = { 
+                        scannedData?.let { data -> 
+                            isLoading = true
+                            coroutineScope.launch {
+                                // Default test mock data if "0" is used, otherwise real phone
+                                val phoneToUse = if (phoneNumber == "0") "+33612345678" else phoneNumber
+                                // For the demo bypass, if using test boarding pass PNR is "ABCDEF"
+                                val pnrToUse = if (phoneNumber == "0") "ABCDEF" else data.pnr
+                                
+                                val success = BackendClient.exchangeToken(phoneToUse, pnrToUse)
+                                isLoading = false
+                                if (success) {
+                                    onAuthenticated(data.copy(phoneNumber = phoneNumber))
+                                } else {
+                                    scanError = "Backend authentication failed. Is server running?"
+                                }
+                            }
+                        } 
+                    },
+                    enabled = scannedData != null && isPhoneValid && !isLoading,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),
@@ -329,11 +290,15 @@ fun PassengerAuthCard(onAuthenticated: (BoardingPassData) -> Unit) {
                         contentColor = MaterialTheme.colorScheme.onPrimary
                     )
                 ) {
-                    Text(
-                        text = "Enter app",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
+                    if (isLoading) {
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
+                    } else {
+                        Text(
+                            text = "Enter app",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
 
                 if (phoneNumber.isNotEmpty() && !isPhoneValid) {
@@ -701,98 +666,7 @@ private fun PhoneNumberConfirmed(phoneNumber: String, onEdit: () -> Unit) {
     }
 }
 
-@Composable
-fun StaffAuthCard(onAuthenticated: () -> Unit) {
-    var username by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var error by remember { mutableStateOf<String?>(null) }
-
-    ElevatedCard(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            SectionLabel(text = "Staff login", icon = Icons.Default.Badge)
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            OutlinedTextField(
-                value = username,
-                onValueChange = { username = it },
-                label = { Text("Username") },
-                leadingIcon = {
-                    Icon(
-                        Icons.Default.Person,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                singleLine = true
-            )
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
-                label = { Text("Password") },
-                leadingIcon = {
-                    Icon(
-                        Icons.Default.Lock,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                singleLine = true,
-                visualTransformation = PasswordVisualTransformation()
-            )
-
-            if (error != null) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = error!!,
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.labelMedium
-                )
-            }
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            Button(
-                onClick = {
-                    if (username == "admin" && password == "admin") {
-                        onAuthenticated()
-                    } else {
-                        error = "Invalid admin credentials"
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            ) {
-                Text(
-                    text = "Staff login",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
-    }
-}
+// StaffAuthCard removed
 
 @Composable
 fun ScannerOverlay() {
