@@ -299,3 +299,85 @@ class MainActivity : ComponentActivity() {
           }
       }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PassengerMainScreen(
+    data: BoardingPassData,
+    onStepToggled: (Int) -> Unit,
+    onDeleteNotification: (String) -> Unit,
+    onCreateGroup: (String) -> Unit,
+    onDeleteGroup: (String) -> Unit,
+    onRenameGroup: (String, String) -> Unit,
+    onJoinGroup: (String) -> Unit,
+    onOpenDev: () -> Unit,
+    onLogout: () -> Unit
+) {
+    var selectedTab by remember { mutableIntStateOf(0) }
+
+    Scaffold(
+        bottomBar = {
+            NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 8.dp) {
+                NavigationBarItem(
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 },
+                    icon = { Icon(Icons.Default.Map, null) },
+                    label = { Text("Map") }
+                )
+                NavigationBarItem(
+                    selected = selectedTab == 1,
+                    onClick = { selectedTab = 1 },
+                    icon = { Icon(Icons.AutoMirrored.Filled.List, null) },
+                    label = { Text("Steps") }
+                )
+                NavigationBarItem(
+                    selected = selectedTab == 2,
+                    onClick = { selectedTab = 2 },
+                    icon = { 
+                        BadgedBox(badge = { if (data.notifications.isNotEmpty()) Badge { Text(data.notifications.size.toString()) } }) {
+                            Icon(Icons.Default.Inbox, null)
+                        }
+                    },
+                    label = { Text("Inbox") }
+                )
+                NavigationBarItem(
+                    selected = selectedTab == 3,
+                    onClick = { selectedTab = 3 },
+                    icon = { Icon(Icons.Default.Groups, null) },
+                    label = { Text("Groups") }
+                )
+                NavigationBarItem(
+                    selected = selectedTab == 4,
+                    onClick = { selectedTab = 4 },
+                    icon = { Icon(Icons.Default.Description, null) },
+                    label = { Text("Data") }
+                )
+            }
+        }
+    ) { innerPadding ->
+        Box(modifier = Modifier.padding(innerPadding)) {
+            AnimatedContent(
+                targetState = selectedTab,
+                transitionSpec = {
+                    fadeIn(tween(300)) togetherWith fadeOut(tween(300))
+                },
+                label = "tab_switch"
+            ) { targetTab ->
+                when (targetTab) {
+                    0 -> MapScreen(data)
+                    1 -> GuidanceScreen(data, onStepToggled)
+                    2 -> InboxScreen(data.notifications, onStepToggled, onDeleteNotification)
+                    3 -> GroupsScreen(
+                        data = data,
+                        groups = data.activeGroups,
+                        onCreateGroup = onCreateGroup,
+                        onDeleteGroup = onDeleteGroup,
+                        onRenameGroup = onRenameGroup,
+                        onJoinGroup = onJoinGroup
+                    )
+                    4 -> DetailsScreen(data, onLogout)
+                }
+            }
+        }
+    }
+}

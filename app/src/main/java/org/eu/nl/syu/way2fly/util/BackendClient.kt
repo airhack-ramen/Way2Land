@@ -36,7 +36,7 @@ object BackendClient {
             if (connection.responseCode == 200) {
                 val response = connection.inputStream.bufferedReader().use { it.readText() }
                 val json = JSONObject(response)
-                jwtToken = json.optString("passengerToken", null)
+                jwtToken = if (json.has("passengerToken") && !json.isNull("passengerToken")) json.getString("passengerToken") else null
                 return@withContext jwtToken != null
             }
         } catch (e: Exception) {
