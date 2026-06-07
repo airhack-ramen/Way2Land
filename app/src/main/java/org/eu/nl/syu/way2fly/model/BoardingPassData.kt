@@ -9,12 +9,14 @@ data class BoardingPassData(
     val flightNumber: String,
     val date: String,
     val seat: String,
-    val phoneNumber: String?,
-    val notifications: List<InboxMessage>,
-    val guidanceSteps: List<GuidanceStep>,
-    val activeGroups: List<FriendGroup>,
+    val phoneNumber: String? = null,
+    val notifications: List<InboxMessage> = emptyList(),
+    val guidanceSteps: List<GuidanceStep> = defaultSteps(),
+    val activeGroups: List<FriendGroup> = emptyList(),
     val threatScore: Int = 0,
-    val passengerToken: String? = null
+    val passengerToken: String? = null,
+    val groupId: String? = null,
+    val companionCount: Int = 0
 )
 
 fun defaultSteps() = listOf(

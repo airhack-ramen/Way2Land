@@ -1,6 +1,12 @@
 package org.eu.nl.syu.way2fly.ui
 
 import android.Manifest
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
+import android.telephony.TelephonyManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
@@ -43,7 +49,6 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.common.InputImage
-import androidx.compose.ui.platform.LocalContext
 import org.eu.nl.syu.way2fly.BuildConfig
 import org.eu.nl.syu.way2fly.model.BoardingPassData
 import org.eu.nl.syu.way2fly.network.BackendApiException
@@ -51,6 +56,7 @@ import org.eu.nl.syu.way2fly.network.PassengerSessionStore
 import org.eu.nl.syu.way2fly.network.Way2LandApiClient
 import org.eu.nl.syu.way2fly.ui.theme.Way2FlyTheme
 import org.eu.nl.syu.way2fly.util.BCBPParser
+import org.eu.nl.syu.way2fly.util.BackendClient
 import kotlinx.coroutines.launch
 
 @Composable
@@ -113,12 +119,13 @@ fun PassengerAuthCard(onAuthenticated: (BoardingPassData) -> Unit) {
     var phoneNumber by remember { mutableStateOf("") }
     var scannedData by remember { mutableStateOf<BoardingPassData?>(null) }
     var scanError by remember { mutableStateOf<String?>(null) }
+    var permissionState by remember { mutableStateOf<PermissionState>(PermissionState.Initial) }
     var authError by remember { mutableStateOf<String?>(null) }
     var isAuthenticating by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     fun isValidE164PhoneNumber(value: String): Boolean {
-        return value.matches(Regex("^\\+[1-9]\\d{1,14}$"))
+        return value == "0" || value.matches(Regex("^\\+[1-9]\\d{1,14}$"))
     }
 
     ElevatedCard(
@@ -162,91 +169,477 @@ fun PassengerAuthCard(onAuthenticated: (BoardingPassData) -> Unit) {
                 SuccessScanView(scannedData!!) { scannedData = null }
             }
 
-            HorizontalDivider(modifier = Modifier.padding(vertical = 24.dp).alpha(0.1f))
+            if (scannedData != null) {
+                Spacer(modifier = Modifier.height(4.dp))
 
-            OutlinedTextField(
-                value = phoneNumber,
-                onValueChange = { phoneNumber = it },
-                label = { Text("Phone Number") },
-                leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
+                SectionLabel(
+                    text = "Phone number",
+                    icon = Icons.Default.Phone
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                when (permissionState) {
+                    PermissionState.Initial -> {
+                        PhonePermissionRequestCard(
+                            onGrantPermission = { permissionState = PermissionState.Requesting },
+                            onEnterManually = { permissionState = PermissionState.ManualEntry }
+                        )
+                    }
+                    PermissionState.Requesting -> {
+                        PermissionRequestScreen(
+                            onPermissionGranted = { phone ->
+                                phoneNumber = phone
+                                permissionState = PermissionState.Completed
+                            },
+                            onPermissionDenied = { permissionState = PermissionState.ManualEntry },
+                            onGoBack = { permissionState = PermissionState.Initial }
+                        )
+                    }
+                    PermissionState.ManualEntry -> {
+                        PhoneNumberInput(
+                            phoneNumber = phoneNumber,
+                            onPhoneNumberChange = { phoneNumber = it },
+                            onBack = { permissionState = PermissionState.Initial },
+                            isValidE164PhoneNumber = ::isValidE164PhoneNumber
+                        )
+                    }
+                    PermissionState.Completed -> {
+                        PhoneNumberConfirmed(
+                            phoneNumber = phoneNumber,
+                            onEdit = { permissionState = PermissionState.ManualEntry }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                val normalizedPhoneNumber = phoneNumber.trim()
+                val isPhoneValid = isValidE164PhoneNumber(normalizedPhoneNumber)
+
+                Button(
+                    onClick = { 
+                        scannedData?.let { data -> 
+                            authError = null
+                            isAuthenticating = true
+                            scope.launch {
+                                try {
+                                    // Default test mock data if "0" is used, otherwise real phone
+                                    val phoneToUse = if (normalizedPhoneNumber == "0") "+33612345678" else normalizedPhoneNumber
+                                    // For the demo bypass, if using test boarding pass PNR is "ABCDEF"
+                                    val pnrToUse = if (normalizedPhoneNumber == "0") "ABCDEF" else data.pnr
+                                    
+                                    val tokenResponse = Way2LandApiClient.exchangePassengerToken(
+                                        phoneNumber = phoneToUse,
+                                        pnr = pnrToUse
+                                    )
+                                    isAuthenticating = false
+                                    onAuthenticated(
+                                        data.copy(
+                                            phoneNumber = phoneToUse,
+                                            pnr = pnrToUse,
+                                            passengerToken = tokenResponse.passengerToken
+                                        )
+                                    )
+                                    PassengerSessionStore.save(context, phoneToUse, tokenResponse.passengerToken)
+                                } catch (exception: BackendApiException) {
+                                    authError = "Backend auth failed (${exception.statusCode}): ${exception.message}"
+                                    isAuthenticating = false
+                                } catch (exception: Exception) {
+                                    authError = exception.message ?: "Authentication failed"
+                                    isAuthenticating = false
+                                }
+                            }
+                        } 
+                    },
+                    enabled = scannedData != null && isPhoneValid && !isAuthenticating,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                ) {
+                    if (isAuthenticating) {
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
+                    } else {
+                        Text(
+                            text = "Enter app",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                if (phoneNumber.isNotEmpty() && !isPhoneValid) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Invalid format (use E.164 like +33612345678 or '0')",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+
+                if (authError != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = authError!!,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionLabel(text: String, icon: ImageVector) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+    }
+}
+
+private enum class PermissionState {
+    Initial,
+    Requesting,
+    ManualEntry,
+    Completed
+}
+
+@Composable
+private fun PhonePermissionRequestCard(
+    onGrantPermission: () -> Unit,
+    onEnterManually: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest)
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Smartphone,
+                    contentDescription = null,
+                    modifier = Modifier.size(28.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Text(
+                text = "Auto-fill phone number?",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            val normalizedPhoneNumber = phoneNumber.trim()
-            val isPhoneValid = isValidE164PhoneNumber(normalizedPhoneNumber)
+            Spacer(modifier = Modifier.height(4.dp))
 
-            Button(
-                onClick = {
-                    val scannedPass = scannedData
-                    if (scannedPass == null) {
-                        authError = "Scan a boarding pass first"
-                        return@Button
-                    }
+            Text(
+                text = "We can automatically read your number from your SIM card.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
 
-                    if (!isPhoneValid) {
-                        authError = "Enter an E.164 phone number, for example +33612345678"
-                        return@Button
-                    }
+            Spacer(modifier = Modifier.height(20.dp))
 
-                    authError = null
-                    isAuthenticating = true
-                    scope.launch {
-                        try {
-                            val effectivePnr = if (BuildConfig.DEBUG) "ABCDEF" else scannedPass.pnr
-                            val tokenResponse = Way2LandApiClient.exchangePassengerToken(
-                                phoneNumber = normalizedPhoneNumber,
-                                pnr = effectivePnr
-                            )
-
-                            onAuthenticated(
-                                scannedPass.copy(
-                                    phoneNumber = normalizedPhoneNumber,
-                                    pnr = effectivePnr,
-                                    passengerToken = tokenResponse.passengerToken
-                                )
-                            )
-                            PassengerSessionStore.save(context, normalizedPhoneNumber, tokenResponse.passengerToken)
-                        } catch (exception: BackendApiException) {
-                            authError = "Backend auth failed (${exception.statusCode}): ${exception.message}"
-                        } catch (exception: Exception) {
-                            authError = exception.message ?: "Authentication failed"
-                        } finally {
-                            isAuthenticating = false
-                        }
-                    }
-                },
-                enabled = scannedData != null && isPhoneValid && !isAuthenticating,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary, contentColor = Color.White)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                OutlinedButton(
+                    onClick = onEnterManually,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(14.dp),
+                    contentPadding = PaddingValues(vertical = 14.dp)
+                ) {
+                    Text(
+                        text = "Enter manually",
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+
+                Button(
+                    onClick = onGrantPermission,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(14.dp),
+                    contentPadding = PaddingValues(vertical = 14.dp)
+                ) {
+                    Text(
+                        text = "Auto-fill",
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PermissionRequestScreen(
+    onPermissionGranted: (String) -> Unit,
+    onPermissionDenied: () -> Unit,
+    onGoBack: () -> Unit
+) {
+    val context = LocalContext.current
+    var isProcessing by remember { mutableStateOf(true) }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val phoneGranted = permissions[Manifest.permission.READ_PHONE_NUMBERS] == true ||
+                permissions[Manifest.permission.READ_PHONE_STATE] == true
+
+        if (phoneGranted) {
+            val telephonyManager = context.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_NUMBERS) == PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) {
+                val number = runCatching { telephonyManager.line1Number }.getOrNull()
+                if (!number.isNullOrBlank()) {
+                    onPermissionGranted(number.filter { it.isDigit() || it == '+' })
+                } else {
+                    onPermissionDenied()
+                }
+            } else {
+                onPermissionDenied()
+            }
+        } else {
+            onPermissionDenied()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        permissionLauncher.launch(
+            arrayOf(
+                Manifest.permission.READ_PHONE_NUMBERS,
+                Manifest.permission.READ_PHONE_STATE
+            )
+        )
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest)
+    ) {
+        Column(
+            modifier = Modifier.padding(28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            if (isProcessing) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(40.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    strokeWidth = 3.dp
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
                 Text(
-                    if (isAuthenticating) "CONNECTING..." else "ENTER APP",
+                    text = "Requesting permission...",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.Block,
+                    contentDescription = null,
+                    modifier = Modifier.size(44.dp),
+                    tint = MaterialTheme.colorScheme.error
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Text(
+                    text = "Permission required",
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Text(
+                    text = "Please enable phone permission in Settings to auto-fill your number.",
+                    style = MaterialTheme.typography.bodySmall,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onGoBack,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(14.dp),
+                        contentPadding = PaddingValues(vertical = 14.dp)
+                    ) {
+                        Text(text = "Back", style = MaterialTheme.typography.labelLarge)
+                    }
+
+                    Button(
+                        onClick = {
+                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.fromParts("package", context.packageName, null)
+                            }
+                            context.startActivity(intent)
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(14.dp),
+                        contentPadding = PaddingValues(vertical = 14.dp)
+                    ) {
+                        Text(text = "Open Settings", style = MaterialTheme.typography.labelLarge)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PhoneNumberInput(
+    phoneNumber: String,
+    onPhoneNumberChange: (String) -> Unit,
+    onBack: () -> Unit,
+    isValidE164PhoneNumber: (String) -> Boolean
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = MaterialTheme.colorScheme.onSurface
                 )
             }
-            
-            if (phoneNumber.isNotEmpty() && !isPhoneValid) {
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = "Enter phone number",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        OutlinedTextField(
+            value = phoneNumber,
+            onValueChange = onPhoneNumberChange,
+            label = { Text("Phone Number") },
+            leadingIcon = {
+                Icon(
+                    Icons.Default.Phone,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+            )
+        )
+
+        if (phoneNumber.isNotEmpty()) {
+            val isPhoneValid = isValidE164PhoneNumber(phoneNumber.trim())
+            if (!isPhoneValid) {
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    "Invalid phone (use E.164 format, such as +33612345678)",
+                    text = "Invalid format (use E.164 like +33612345678 or '0')",
                     color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.padding(top = 4.dp)
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PhoneNumberConfirmed(phoneNumber: String, onEdit: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+    ) {
+        Row(
+            modifier = Modifier.padding(18.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onPrimary
                 )
             }
 
-            if (authError != null) {
+            Spacer(modifier = Modifier.width(14.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    authError!!,
-                    color = MaterialTheme.colorScheme.error,
+                    text = "Phone number saved",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = phoneNumber,
                     style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.padding(top = 8.dp)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            TextButton(onClick = onEdit) {
+                Text(
+                    text = "Edit",
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.labelLarge
                 )
             }
         }
